@@ -46,7 +46,7 @@ def confidence_border_cs(data, std_data, cs_shape, cloud_extent, fig=True, thres
     # Inputs:
     #   As defined in data_plus_uncertainity & border_cs
     # Outputs: 2 borders with 68% confidence (by default)
-    
+
     inner_border_data, outer_border_data = data_plus_uncertainity(data, std_data, std_factor=1)
     border_cs(inner_border_data, cs_shape, cloud_extent, fig, threshold)
     border_cs(outer_border_data, cs_shape, cloud_extent, fig, threshold)
