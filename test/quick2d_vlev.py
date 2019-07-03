@@ -4,45 +4,13 @@ import numpy as np
 from mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
 import matplotlib.pyplot as plt
 import random
-import cloud
+#import cloud
 import matplotlib.ticker as mtick
 import matplotlib.colors as mcolors
 import pickle
 from scipy import ndimage
+import process_map as pm
 plt.rc('font', size=13) #default fontsize
-
-def csec_cplot(var_data, t_index, z_index, tr, zr, xr, yr, ext, colors=None, alpha=None, new_fig=1, type="nc", show=0):
-    # if(new_fig==1):
-    #     plt.figure()
-    # plt.xlabel("x coordinate(km)")
-    # plt.ylabel("y coordinate(km)")
-    data = var_data[t_index, z_index, ext[0]:ext[1], ext[2]:ext[3]]
-    # plt.title("Cloud Cross Section at z={:.3f}km, t={}s".format(zr[z_index], tr[t_index]))
-
-    if(type=="c"):
-        cmap="Greys"
-        if(colors!=None):
-            cmap=None
-        plt.contour(data.T, origin='lower', extent=[xr[ext[0]], xr[ext[1]-1], yr[ext[2]], yr[ext[3]-1]], colors=colors, cmap=cmap, alpha=alpha)
-    elif(show!=0):
-        plt.imshow(data.T, origin='lower', extent=[xr[ext[0]], xr[ext[1]-1], yr[ext[2]], yr[ext[3]-1]],vmin=abs(data.min()), vmax=abs(data.max()),cmap="viridis",alpha=alpha)
-        # cbar = plt.colorbar(fraction=0.046, pad=0.04)
-        # cbar.set_label('kg/kg')
-    return data
-
-def cloud_essential_data_extraction(y_pred, std_pred, type, std_pred_factor=1, thres=1e-5):
-    if(type=="l"):
-        data = y_pred - std_pred_factor * std_pred
-    elif(type=="h"):
-        data = y_pred + std_pred_factor * std_pred
-    else:
-        data = 0
-        print("Wrong Type Parameter!!!")
-    data_grid = np.reshape(data, (-1, 70)).T
-    data_b = data
-    data_b[data_b < thres] = 0  # thresholding
-    data_b = np.reshape(data_b, (-1, 70)).T
-    return data_b, data_grid
 
 def mean_prior(y, sigma_blur = 7, type= 1, circ=[35, 35, 20]):
     mf = ndimage.gaussian_filter(y, sigma=sigma_blur) #Blurring
@@ -187,12 +155,7 @@ def criss_cross(Xt_grid, y, sigma_n, i, mf=[]):
     return x, ytt
 
 def circular(Xt_grid, y, sigma_n, r, eps=4, a=34, b=34, mf=[]):
-    # if(r in (28,24)):
-    #     eps=2.3
-    # elif (r in (18, 15,12)):
-    #     eps = 2.5
-    # elif (r in (9, 4)):
-    #     eps = 2.6
+
     y_rd = circluar_trajectory(y, a, b, r, eps)
     x1_rd = circluar_trajectory(Xt_grid[:, :, 0], a, b, r, eps)
     x2_rd = circluar_trajectory(Xt_grid[:, :, 1], a, b, r, eps)
@@ -217,11 +180,6 @@ def circular(Xt_grid, y, sigma_n, r, eps=4, a=34, b=34, mf=[]):
     # if (mf.size != 0):
     #     #ytt = ytt - mf[XTi, 35]  # mean func
     return x, ytt
-
-def com(data, coord):
-    mass_sum = np.sum(data)
-    return np.sum(data * coord[:,0])/ mass_sum, np.sum(data * coord[:,1])/ mass_sum
-
 
 def run_gp_circular(mf, save_path=""):
     train_sam_num = 0
@@ -249,15 +207,14 @@ def run_gp_circular(mf, save_path=""):
         plt.xlabel("x coordinate(km)")
         plt.ylabel("y coordinate(km)")
         plt.imshow(mf.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest', norm=norm_cloud)
-        plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-        plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069))
+        plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+        plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069))
         plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
         plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
         cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
         cbar.ax.set_title('    m/s', fontsize=15, pad=7)
         if (save_path):
             plt.savefig(save_path + 'prior_mean.png')
-
 
     for r in  (34, 29, 24, 19, 14, 9): #circ traj
         x, ytt = circular(Xt_grid, y, sigma_n, r) #TODO: Mean prior with circular!!
@@ -281,30 +238,30 @@ def run_gp_circular(mf, save_path=""):
 
         train_sam_num += len(x)
         num_points = np.append(num_points, train_sam_num)
-        train_per = train_sam_num / float(4900)
+        train_per = train_sam_num / float(yt.size)
 
         y_pred, std_pred = gp.predict(Xt, return_std=True)
-        std_pred = std_pred.reshape(4900, 1)
+        std_pred = std_pred.reshape(y_pred.shape)
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt - y_pred[:, 0]
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
-        com_pred_x, com_pred_y = com(y_pred[:, 0], Xt)
-        y_pred_grid = np.reshape(y_pred, (-1, 70)).T
+        com_pred_x, com_pred_y = pm.com(Xt ,y_pred[:, 0])
+        y_pred_grid = np.reshape(y_pred, y.shape).T
 
         if (1):  # 1 or i==7
 
             plt.figure(figsize=(24, 6), dpi=62)
             plt.subplot(1, 4, 1, xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title('GT with %2d (%4.2f%%) Training Points' % (train_sam_num, train_per * 100), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y_lwc, y_lwc.shape, cloud_extent)
             plt.scatter(com_x, com_y, c="white", marker="x", s=80)
             plt.scatter(XT[:, 0], XT[:, 1], c="black", marker="x", s=8)
             plt.imshow(y.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
                        norm=norm_cloud)
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069))
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069))
             plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
@@ -312,12 +269,12 @@ def run_gp_circular(mf, save_path=""):
 
             plt.subplot(1, 4, 2, aspect='equal', xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title("Prediction $l$: %dm, $\sigma_f$: %3.2fm/s" % (l * 1000, sigma), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y_lwc, y_lwc.shape, cloud_extent)
             plt.scatter(com_pred_x, com_pred_y, c="white", marker="x", s=80)
             plt.imshow(y_pred_grid, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
                        norm=norm_cloud)
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
             cbar.ax.set_title('   m/s', fontsize=15, pad=7)
@@ -326,8 +283,8 @@ def run_gp_circular(mf, save_path=""):
                 .set_title("Predicted Standard Deviation", size=14)
             plt.imshow(np.reshape(std_pred, (-1, 70)).T, origin='lower', extent=cloud_extent, vmin=std_pred.min(),
                        vmax=std_pred.max(), cmap="jet")
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.clim(0, 2.25)
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
@@ -337,8 +294,8 @@ def run_gp_circular(mf, save_path=""):
                 .set_title("Error, RMSE: %3.2fm/s" % (y_mse), size=14)
             plt.imshow(np.reshape(y_error, (-1, 70)).T, origin='lower', extent=cloud_extent, vmin=y_error.min(),
                        vmax=y_error.max(), cmap="jet")
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.clim(-2, 5)
             cbar = plt.colorbar(fraction=0.0471, pad=0.01)
@@ -435,8 +392,8 @@ def run_gp_criss_cross(mf, save_path=""):
         plt.xlabel("x coordinate(km)")
         plt.ylabel("y coordinate(km)")
         plt.imshow(mf.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest', norm=norm_cloud)
-        plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-        plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069))
+        plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+        plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069))
         plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
         plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
         cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
@@ -471,29 +428,29 @@ def run_gp_criss_cross(mf, save_path=""):
 
         train_sam_num += len(x)
         num_points = np.append(num_points, train_sam_num)
-        train_per = train_sam_num/float(4900)
+        train_per = train_sam_num / float(yt.size)
 
         y_pred, std_pred = gp.predict(Xt, return_std=True)
-        std_pred = std_pred.reshape(4900, 1)
+        std_pred = std_pred.reshape(y_pred.shape)
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt-y_pred[:,0]
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
-        com_pred_x, com_pred_y = com(y_pred[:, 0], Xt)
-        y_pred_grid = np.reshape(y_pred, (-1, 70)).T
+        com_pred_x, com_pred_y = pm.com(Xt, y_pred[:, 0])
+        y_pred_grid = np.reshape(y_pred, y.shape).T
 
         if (1):  # 1 or i==7
 
             plt.figure(figsize=(24, 6), dpi=62)
             plt.subplot(1, 4, 1, xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title('GT with %2d (%4.2f%%) Training Points' % (train_sam_num, train_per * 100), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y_lwc, y_lwc.shape, cloud_extent)
             plt.scatter(com_x, com_y, c="white", marker="x", s=80)
             plt.scatter(XT[:, 0], XT[:, 1], c="black", marker="x", s=8)
             plt.imshow(y.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest', norm=norm_cloud)
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069))
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069))
             plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
@@ -501,12 +458,12 @@ def run_gp_criss_cross(mf, save_path=""):
 
             plt.subplot(1, 4, 2, aspect='equal', xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title("Prediction $l$: %dm, $\sigma_f$: %3.2fm/s" % (l*1000, sigma), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y_lwc, y_lwc.shape, cloud_extent)
             plt.scatter(com_pred_x, com_pred_y, c="white", marker="x", s=80)
             plt.imshow(y_pred_grid, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
                        norm=norm_cloud)
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
             cbar.ax.set_title('   m/s', fontsize=15, pad=7)
@@ -515,8 +472,8 @@ def run_gp_criss_cross(mf, save_path=""):
                 .set_title("Predicted Standard Deviation", size=14)
             plt.imshow(np.reshape(std_pred, (-1, 70)).T, origin='lower', extent=cloud_extent, vmin=std_pred.min(),
                        vmax=std_pred.max(), cmap="jet")
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.clim(0, 2.25)
             cbar = plt.colorbar(fraction=0.0471, pad=0.01, format='%.1f')
@@ -526,8 +483,8 @@ def run_gp_criss_cross(mf, save_path=""):
                 .set_title("Error, RMSE: %3.2fm/s" % (y_mse), size=14)
             plt.imshow(np.reshape(y_error, (-1, 70)).T, origin='lower', extent=cloud_extent, vmin=y_error.min(),
                        vmax=y_error.max(), cmap="jet")
-            plt.xticks(np.arange(xr[30], xr[100] + 0.069, 2 * 0.069))
-            plt.yticks(np.arange(yr[60], yr[130] + 0.069, 2 * 0.069), visible=False)
+            plt.xticks(np.arange(xr[0], xr[-1] + 0.069, 2 * 0.069))
+            plt.yticks(np.arange(yr[0], yr[-1] + 0.069, 2 * 0.069), visible=False)
             plt.gca().xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
             plt.clim(-2, 5)
             cbar = plt.colorbar(fraction=0.0471, pad=0.01)
@@ -601,66 +558,74 @@ def run_gp_criss_cross(mf, save_path=""):
 #           for second in range(1, 61)]
 # atm = MesoNHAtmosphere(mfiles, 1)
 #
-# lwc_data1 = atm.data['RCT'][449:455,89:90,60:200,110:250]  #89:90 means only 1 height 1.125 km85:123 range of z
-# zwind_data1 = atm.data['WT'][449:455,89:90,60:200,110:250] #85:123 range of z
-#
-# ids1,counter1,clouds1=cloud.cloud_segmentation(lwc_data1)
+# lwc_data = atm.data['RCT'][454:455,89:90,90:160,170:240]
+# zwind_data = atm.data['WT'][454:455,89:90,90:160,170:240]
+# all_Zs = atm.data["VLEV"][:,0,0]
+
+""" not needed now (don't uncomment)
+# ids1,counter1,clouds1=cloud.cloud_segmentation(lwc_data)
 # clouds1=list(set(clouds1.values()))
 # length_point_clds = np.ndarray((0,1))
 # for each_cloud in clouds1:
 #     temp = len(each_cloud.points)
 #     length_point_clds = np.vstack((length_point_clds,temp))
-#
+# 
 # sorted_indices = length_point_clds[:,0].argsort()[::-1] # clouds sorted acc to #cloud_points
 # cloud1 = clouds1[sorted_indices[0]] #Biggest cloud
-#
-# cloud1.calculate_attributes(lwc_data1,zwind_data1) #zwind also
-# #cloud1.calculate_attributes(lwc_data1)
-#
-# lwc_cloud1 = np.zeros(lwc_data1.shape)
+# 
+# cloud1.calculate_attributes(lwc_data,zwind_data) #zwind also
+# #cloud1.calculate_attributes(lwc_data)
+# 
+# lwc_cloud1 = np.zeros(lwc_data.shape)
 # for point in cloud1.points:
 #     lwc_cloud1[point] = 1
 # del clouds1
-# all_Zs=atm.data["VLEV"][:,0,0]
+"""
+
 
 # Dumping
-# pickle_out = open("lwc_cloud.pickle","wb")
-# pickle.dump(lwc_cloud1, pickle_out)
+# pickle_out = open("lwc_data_2d.pickle","wb")
+# pickle.dump(lwc_data, pickle_out)
+# pickle_out.close()
+# pickle_out = open("zwind_data_2d.pickle","wb")
+# pickle.dump(zwind_data, pickle_out)
+# pickle_out.close()
+# pickle_out = open("all_Zs_2d.pickle","wb")
+# pickle.dump(all_Zs, pickle_out)
 # pickle_out.close()
 
 # Loading
-# remove latin1 in some systems
-pickle_in = open("lwc_data1_2d.pickle","rb")
-lwc_data1 = pickle.load(pickle_in, encoding='latin1')
-pickle_in = open("zwind_data1_2d.pickle","rb")
-zwind_data1 = pickle.load(pickle_in, encoding='latin1')
-pickle_in = open("lwc_cloud1_2d.pickle","rb")
-lwc_cloud1 = pickle.load(pickle_in, encoding='latin1')
+# add latin1 in some systems
+# lwc_cloud1 = pickle.load(pickle_in) #, encoding='latin1') #not needed now
+
+pickle_in = open("lwc_data_2d.pickle","rb")
+lwc_data = pickle.load(pickle_in) #, encoding='latin1')
+pickle_in = open("zwind_data_2d.pickle","rb")
+zwind_data = pickle.load(pickle_in) #, encoding='latin1')
 pickle_in = open("all_Zs_2d.pickle","rb")
-all_Zs = pickle.load(pickle_in, encoding='latin1')
+all_Zs = pickle.load(pickle_in) #, encoding='latin1')
 
-xr =np.arange(0.005 + 60*0.01, 0.005 + 200*0.01,0.01)
-yr= np.arange(0.005 + 110*0.01, 0.005 + 250*0.01,0.01)
+xr =np.arange(0.005 + 90*0.01, 0.005 + 160*0.01,0.01)
+yr= np.arange(0.005 + 170*0.01, 0.005 + 240*0.01,0.01)
 zr = all_Zs[89:90] #85:123 range of z
-tr = np.arange(449,455)
+tr = np.arange(454,455)
 
-y = csec_cplot(zwind_data1, 5, 0, tr, zr, xr, yr,[30,100,60,130])
-x1 = xr[30:100]
-x2 = yr[60:130]
+y = zwind_data[0, 0]
+y_lwc = lwc_data[0, 0] # For GT Border contour
 
 # data for test on whole patch 70X70
-Xt_grid = np.array(np.meshgrid(x1,x2)).T
+Xt_grid = np.array(np.meshgrid(xr,yr)).T
 Xt = Xt_grid.reshape(-1,2)
 yt = y.flatten()
-com_x, com_y = com(yt, Xt)
-cloud_extent = [xr[30], xr[99], yr[60], yr[129]]
+com_x, com_y = pm.com(Xt, yt)
+cloud_extent = [xr[0], xr[-1], yr[0], yr[-1]]
 
 cmap_cloud, norm_cloud = get_color_nd_norm("zwind")
 save_path =""
 
 # EXP 1 (without prior, criss cross trajectory)
-# mf = np.array([]) # zero mean prior
-# run_gp_criss_cross(mf, save_path)
+mf = np.array([]) # zero mean prior
+run_gp_criss_cross(mf, save_path)
 
 # EXP 2 (without prior, circular trajectory)
 # mf = np.array([]) # zero mean prior
