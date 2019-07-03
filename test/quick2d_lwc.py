@@ -4,45 +4,13 @@ import numpy as np
 from mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
 import matplotlib.pyplot as plt
 import random
-import cloud
 import matplotlib.ticker as mtick
 import matplotlib.colors as mcolors
 import pickle
 from scipy import ndimage
+import process_map as pm
+
 plt.rc('font', size=13) #default fontsize
-
-def csec_cplot(var_data, t_index, z_index, tr, zr, xr, yr, ext, colors=None, alpha=None, new_fig=1, type="nc", show=0):
-    # if(new_fig==1):
-    #     plt.figure()
-    # plt.xlabel("x coordinate(km)")
-    # plt.ylabel("y coordinate(km)")
-    data = var_data[t_index, z_index, ext[0]:ext[1], ext[2]:ext[3]]
-    # plt.title("Cloud Cross Section at z={:.3f}km, t={}s".format(zr[z_index], tr[t_index]))
-
-    if(type=="c"):
-        cmap="Greys"
-        if(colors!=None):
-            cmap=None
-        plt.contour(data.T, origin='lower', extent=[xr[ext[0]], xr[ext[1]-1], yr[ext[2]], yr[ext[3]-1]], colors=colors, cmap=cmap, alpha=alpha)
-    elif(show!=0):
-        plt.imshow(data.T, origin='lower', extent=[xr[ext[0]], xr[ext[1]-1], yr[ext[2]], yr[ext[3]-1]],vmin=abs(data.min()), vmax=abs(data.max()),cmap="viridis",alpha=alpha)
-        # cbar = plt.colorbar(fraction=0.046, pad=0.04)
-        # cbar.set_label('kg/kg')
-    return data
-
-def cloud_essential_data_extraction(y_pred, std_pred, type, std_pred_factor=1, thres=1e-5):
-    if(type=="l"):
-        data = y_pred - std_pred_factor * std_pred
-    elif(type=="h"):
-        data = y_pred + std_pred_factor * std_pred
-    else:
-        data = 0
-        print("Wrong Type Parameter!!!")
-    data_grid = np.reshape(data, (-1, 70)).T
-    data_b = data
-    data_b[data_b < thres] = 0  # thresholding
-    data_b = np.reshape(data_b, (-1, 70)).T
-    return data_b, data_grid
 
 def mean_prior(y, sigma_blur = 7, type= 1, circ=[35, 35, 20]):
     mf = ndimage.gaussian_filter(y, sigma=sigma_blur) #Blurring
@@ -187,12 +155,6 @@ def criss_cross(Xt_grid, y, sigma_n, i, mf=[]):
     return x, ytt
 
 def circular(Xt_grid, y, sigma_n, r, eps=4, a=34, b=34, mf=[]):
-    # if(r in (28,24)):
-    #     eps=2.3
-    # elif (r in (18, 15,12)):
-    #     eps = 2.5
-    # elif (r in (9, 4)):
-    #     eps = 2.6
     y_rd = circluar_trajectory(y, a, b, r, eps)
     x1_rd = circluar_trajectory(Xt_grid[:, :, 0], a, b, r, eps)
     x2_rd = circluar_trajectory(Xt_grid[:, :, 1], a, b, r, eps)
@@ -217,10 +179,6 @@ def circular(Xt_grid, y, sigma_n, r, eps=4, a=34, b=34, mf=[]):
     # if (mf.size != 0):
     #     #ytt = ytt - mf[XTi, 35]  # mean func
     return x, ytt
-
-def com(data, coord):
-    mass_sum = np.sum(data)
-    return np.sum(data * coord[:,0])/ mass_sum, np.sum(data * coord[:,1])/ mass_sum
 
 
 def run_gp_circular(mf, save_path=""):
@@ -271,24 +229,16 @@ def run_gp_circular(mf, save_path=""):
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt - y_pred[:, 0]
-        com_pred_x, com_pred_y = com(y_pred[:, 0], Xt)
+        com_pred_x, com_pred_y = pm.com(Xt, y_pred[:, 0])
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
         y_pred_grid = np.reshape(y_pred, (-1, 70)).T
 
-        y_pred_b = y_pred  # lwc
-        y_pred_b[y_pred_b < 1e-5] = 0  # lwc thresholding
-        y_pred_b = np.reshape(y_pred_b, (-1, 70)).T  # lwc
-        # lwc border
-        std_pred_factor = 1
-        lower_border_b, lower_border_grid = cloud_essential_data_extraction(y_pred, std_pred, type="l")  # lower border
-        higher_border_b, higher_border_grid = cloud_essential_data_extraction(y_pred, std_pred,
-                                                                              type="h")  # higher border
         if (1):  # 1 or i==7 r==9
             plt.figure(figsize=(24, 6), dpi=62)
             plt.subplot(1, 4, 1, xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title('GT with %2d (%4.2f%%) Training Points' % (train_sam_num, train_per * 100), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y, y.shape, cloud_extent)
             plt.scatter(com_x, com_y, c="white", marker="x", s=80)
             plt.scatter(XT[:, 0], XT[:, 1], c="black", marker="x", s=8)
             plt.imshow(y.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
@@ -304,9 +254,8 @@ def run_gp_circular(mf, save_path=""):
 
             plt.subplot(1, 4, 2, aspect='equal', xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title("Prediction $l$: %dm, $\sigma_f$: %2.3e" % (l * 1000, sigma), size=14)  # lwc
-            plt.contour(higher_border_b, origin='lower', extent=cloud_extent, colors="darkgray", levels=0)  # lwc
-            plt.contour(lower_border_b, origin='lower', extent=cloud_extent, colors="darkgray", levels=0)  # lwc
-            plt.contour(y_pred_b, origin='lower', extent=cloud_extent, colors="Black", levels=0)  # lwc
+            pm.border_cs(y_pred, y.shape, cloud_extent)
+            pm.confidence_border_cs(y_pred, std_pred, y.shape, cloud_extent)
             # zwind csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
             plt.scatter(com_pred_x, com_pred_y, c="white", marker="x", s=80)
             plt.imshow(y_pred_grid, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
@@ -382,8 +331,6 @@ def run_gp_circular(mf, save_path=""):
     plt.xlabel("Number of data points acquired", fontsize=18)
     # plt.ylabel("$\sigma_f $(unit: m/s)", fontsize=16)
     plt.ylabel("$\sigma_f $(unit: kg water/kg air)", fontsize=16)  # lwc
-    # plt.title("Evolution of Signal Standard Deviation (Init: $\sigma_f$: %3.2f, Bounds=(%3.2f, %3.2f))" % (
-    #   sigma_f[0], sigma_f_bounds[0], sigma_f_bounds[1]), fontsize=18)
     plt.title("Evolution of Signal Standard Deviation (Init: $\sigma_f$: %1.0e, Bounds=(%1.0e, %1.0e))" % (
         sigma_f[0], sigma_f_bounds[0], sigma_f_bounds[1]), fontsize=18)  # lwc
     if (save_path):
@@ -415,7 +362,6 @@ def run_gp_circular(mf, save_path=""):
     plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))  # lwc
     plt.xlabel("Number of data points acquired", fontsize=18)
     plt.ylabel("RMSE Score (unit: kg water/kg air)", fontsize=18)  # lwc
-    # plt.ylabel("RMSE Score (unit: m/s)", fontsize=18)
     plt.title("Evolution of Root Mean Square Error", fontsize=18)
     if (save_path):
         plt.savefig(save_path + 'rmse.png')
@@ -484,23 +430,16 @@ def run_gp_criss_cross(mf, save_path=""):
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt - y_pred[:, 0]
-        com_pred_x, com_pred_y = com(y_pred[:, 0], Xt)
+        com_pred_x, com_pred_y = pm.com(Xt, y_pred[:, 0])
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
         y_pred_grid = np.reshape(y_pred, (-1, 70)).T
 
-        y_pred_b= y_pred #lwc
-        y_pred_b[y_pred_b<1e-5]=0 #lwc thresholding
-        y_pred_b = np.reshape(y_pred_b, (-1, 70)).T #lwc
-        # lwc border
-        std_pred_factor = 1
-        lower_border_b, lower_border_grid = cloud_essential_data_extraction(y_pred, std_pred, type="l") #lower border
-        higher_border_b, higher_border_grid = cloud_essential_data_extraction(y_pred, std_pred, type="h") #higher border
         if (1):  # 1 or i==7 r==9
             plt.figure(figsize=(24, 6), dpi=62)
             plt.subplot(1, 4, 1, xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title('GT with %2d (%4.2f%%) Training Points' % (train_sam_num, train_per * 100), size=14)
-            csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y, y.shape, cloud_extent)
             plt.scatter(com_x, com_y, c="white", marker="x", s=80)
             plt.scatter(XT[:, 0], XT[:, 1], c="black", marker="x", s=8)
             plt.imshow(y.T, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest', norm=norm_cloud)
@@ -515,10 +454,8 @@ def run_gp_criss_cross(mf, save_path=""):
 
             plt.subplot(1, 4, 2, aspect='equal', xlabel="x coordinate(km)", ylabel="y coordinate(km)") \
                 .set_title("Prediction $l$: %dm, $\sigma_f$: %2.3e" % (l*1000, sigma), size=14) #lwc
-            plt.contour(higher_border_b, origin='lower', extent=cloud_extent, colors="darkgray", levels=0) #lwc
-            plt.contour(lower_border_b, origin='lower', extent=cloud_extent, colors="darkgray", levels=0) #lwc
-            plt.contour(y_pred_b, origin='lower', extent=cloud_extent, colors="Black", levels=0)  #lwc
-            #zwind csec_cplot(lwc_cloud1, 5, 0, tr, zr, xr, yr, [30, 100, 60, 130], colors="black", alpha=0.3, type="c")
+            pm.border_cs(y_pred, y.shape, cloud_extent)
+            pm.confidence_border_cs(y_pred, std_pred, y.shape, cloud_extent)
             plt.scatter(com_pred_x, com_pred_y, c="white", marker="x", s=80)
             plt.imshow(y_pred_grid, origin='lower', extent=cloud_extent, cmap=cmap_cloud, interpolation='nearest',
                        norm=norm_cloud)
@@ -591,8 +528,6 @@ def run_gp_criss_cross(mf, save_path=""):
     plt.xlabel("Number of data points acquired", fontsize=18)
     #plt.ylabel("$\sigma_f $(unit: m/s)", fontsize=16)
     plt.ylabel("$\sigma_f $(unit: kg water/kg air)", fontsize=16) #lwc
-    #plt.title("Evolution of Signal Standard Deviation (Init: $\sigma_f$: %3.2f, Bounds=(%3.2f, %3.2f))" % (
-     #   sigma_f[0], sigma_f_bounds[0], sigma_f_bounds[1]), fontsize=18)
     plt.title("Evolution of Signal Standard Deviation (Init: $\sigma_f$: %1.0e, Bounds=(%1.0e, %1.0e))"% (
         sigma_f[0], sigma_f_bounds[0], sigma_f_bounds[1]), fontsize=18) #lwc
     if (save_path):
@@ -623,7 +558,6 @@ def run_gp_criss_cross(mf, save_path=""):
     plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e')) #lwc
     plt.xlabel("Number of data points acquired", fontsize=18)
     plt.ylabel("RMSE Score (unit: kg water/kg air)", fontsize=18) #lwc
-    #plt.ylabel("RMSE Score (unit: m/s)", fontsize=18)
     plt.title("Evolution of Root Mean Square Error", fontsize=18)
     if (save_path):
         plt.savefig(save_path + 'rmse.png')
@@ -636,56 +570,57 @@ def run_gp_criss_cross(mf, save_path=""):
 #
 # lwc_data1 = atm.data['RCT'][449:455,89:90,60:200,110:250]  #89:90 means only 1 height 1.125 km85:123 range of z
 # zwind_data1 = atm.data['WT'][449:455,89:90,60:200,110:250] #85:123 range of z
-#
+# all_Zs=atm.data["VLEV"][:,0,0]
+
+""" not needed now (don't uncomment)
 # ids1,counter1,clouds1=cloud.cloud_segmentation(lwc_data1)
 # clouds1=list(set(clouds1.values()))
 # length_point_clds = np.ndarray((0,1))
 # for each_cloud in clouds1:
 #     temp = len(each_cloud.points)
 #     length_point_clds = np.vstack((length_point_clds,temp))
-#
+# 
 # sorted_indices = length_point_clds[:,0].argsort()[::-1] # clouds sorted acc to #cloud_points
 # cloud1 = clouds1[sorted_indices[0]] #Biggest cloud
-#
+# 
 # cloud1.calculate_attributes(lwc_data1,zwind_data1) #zwind also
 # #cloud1.calculate_attributes(lwc_data1)
-#
+# 
 # lwc_cloud1 = np.zeros(lwc_data1.shape)
 # for point in cloud1.points:
 #     lwc_cloud1[point] = 1
 # del clouds1
-# all_Zs=atm.data["VLEV"][:,0,0]
+"""
+
 
 # Dumping
-# pickle_out = open("lwc_cloud.pickle","wb")
-# pickle.dump(lwc_cloud1, pickle_out)
+# pickle_out = open("lwc_data1_2d.pickle","wb")
+# pickle.dump(lwc_data1, pickle_out)
+# pickle_out.close()
+# pickle_out = open("zwind_data1_2d.pickle","wb")
+# pickle.dump(zwind_data1, pickle_out)
+# pickle_out.close()
+# pickle_out = open("all_Zs_2d.pickle","wb")
+# pickle.dump(all_Zs, pickle_out)
 # pickle_out.close()
 
 # Loading
-# pickle_in = open("lwc_data1_2d.pickle","rb")
-# lwc_data1 = pickle.load(pickle_in)
-# pickle_in = open("zwind_data1_2d.pickle","rb")
-# zwind_data1 = pickle.load(pickle_in)
-# pickle_in = open("lwc_cloud1_2d.pickle","rb")
-# lwc_cloud1 = pickle.load(pickle_in)
-# pickle_in = open("all_Zs_2d.pickle","rb")
-# all_Zs = pickle.load(pickle_in)
+# add latin1 in some systems
+# lwc_cloud1 = pickle.load(pickle_in) #, encoding='latin1') #not needed now
 
 pickle_in = open("lwc_data1_2d.pickle","rb")
-lwc_data1 = pickle.load(pickle_in, encoding='latin1')
+lwc_data1 = pickle.load(pickle_in) #, encoding='latin1')
 pickle_in = open("zwind_data1_2d.pickle","rb")
-zwind_data1 = pickle.load(pickle_in, encoding='latin1')
-pickle_in = open("lwc_cloud1_2d.pickle","rb")
-lwc_cloud1 = pickle.load(pickle_in, encoding='latin1')
+zwind_data1 = pickle.load(pickle_in) #, encoding='latin1')
 pickle_in = open("all_Zs_2d.pickle","rb")
-all_Zs = pickle.load(pickle_in, encoding='latin1')
+all_Zs = pickle.load(pickle_in) #, encoding='latin1')
 
 xr =np.arange(0.005 + 60*0.01, 0.005 + 200*0.01,0.01)
 yr= np.arange(0.005 + 110*0.01, 0.005 + 250*0.01,0.01)
-zr = all_Zs[89:90] #85:123 range of z
+zr = all_Zs[89:90]
 tr = np.arange(449,455)
 
-y = csec_cplot(lwc_data1, 5, 0, tr, zr, xr, yr,[30,100,60,130])
+y = lwc_data1[5, 0, 30:100, 60:130]
 x1 = xr[30:100]
 x2 = yr[60:130]
 
@@ -693,15 +628,15 @@ x2 = yr[60:130]
 Xt_grid = np.array(np.meshgrid(x1,x2)).T
 Xt = Xt_grid.reshape(-1,2)
 yt = y.flatten()
-com_x, com_y = com(yt, Xt)
+com_x, com_y = pm.com(Xt, yt)
 cloud_extent = [xr[30], xr[99], yr[60], yr[129]]
 
 cmap_cloud, norm_cloud = get_color_nd_norm() #lwc
 mf = np.array([]) # zero mean prior
-#mf = np.array([2, 7, 35, 35, 20])
-# [0] -> 1 whole, 2 circular
-# [1] -> sigma_blur
-# [2][3][4] -> centre + radius of circular prior
+# mf = np.array([2, 7, 35, 35, 20])
+# # [0] -> 1 whole, 2 circular
+# # [1] -> sigma_blur
+# # [2][3][4] -> centre + radius of circular prior
 save_path =""
 
 # EXP 1 (without prior, criss cross trajectory)
