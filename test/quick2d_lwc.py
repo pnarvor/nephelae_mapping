@@ -223,16 +223,16 @@ def run_gp_circular(mf, save_path=""):
         print("log marginal likelihood: ", lml)
         train_sam_num += len(x)
         num_points = np.append(num_points, train_sam_num)
-        train_per = train_sam_num / float(4900)
+        train_per = train_sam_num / float(yt.size)
         y_pred, std_pred = gp.predict(Xt, return_std=True)
-        std_pred = std_pred.reshape(4900, 1)
+        std_pred = std_pred.reshape(y_pred.shape)
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt - y_pred[:, 0]
         com_pred_x, com_pred_y = pm.com(Xt, y_pred[:, 0])
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
-        y_pred_grid = np.reshape(y_pred, (-1, 70)).T
+        y_pred_grid = np.reshape(y_pred, y.shape).T
 
         if (1):  # 1 or i==7 r==9
             plt.figure(figsize=(24, 6), dpi=62)
@@ -424,16 +424,16 @@ def run_gp_criss_cross(mf, save_path=""):
         print("log marginal likelihood: ", lml)
         train_sam_num += len(x)
         num_points = np.append(num_points, train_sam_num)
-        train_per = train_sam_num / float(4900)
+        train_per = train_sam_num / float(yt.size)
         y_pred, std_pred = gp.predict(Xt, return_std=True)
-        std_pred = std_pred.reshape(4900, 1)
+        std_pred = std_pred.reshape(y_pred.shape)
         if (mf.size != 0):
             y_pred = mf_flat + y_pred  # mean func
         y_error = yt - y_pred[:, 0]
         com_pred_x, com_pred_y = pm.com(Xt, y_pred[:, 0])
         y_mse = np.sqrt(np.mean(np.square(y_error)))
         mse = np.append(mse, y_mse)
-        y_pred_grid = np.reshape(y_pred, (-1, 70)).T
+        y_pred_grid = np.reshape(y_pred, y.shape).T
 
         if (1):  # 1 or i==7 r==9
             plt.figure(figsize=(24, 6), dpi=62)
@@ -640,8 +640,8 @@ mf = np.array([]) # zero mean prior
 save_path =""
 
 # EXP 1 (without prior, criss cross trajectory)
-# mf = np.array([]) # zero mean prior
-# run_gp_criss_cross(mf, save_path)
+mf = np.array([]) # zero mean prior
+run_gp_criss_cross(mf, save_path)
 
 # EXP 2 (without prior, circular trajectory)
 # mf = np.array([]) # zero mean prior
