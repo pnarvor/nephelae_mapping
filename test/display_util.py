@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.ticker as mtick
 
+time_index = 0
+
 def hori_cloud(data, ti, cmap, norm, cloud_extent, tr, zr, data_name, zi=0):
     # Displays cloud horizontal cross section at fixed height and time
     # Inputs:
@@ -45,17 +47,16 @@ def dynamic_hori_slice(data_interest, cmap, norm, cloud_extent, tr, zr, data_nam
     #   zr - height range
     # Outputs: matplotlib at initial time -> press left/right arrows to navigate
 
-    i = 0
     def press(event):
         # Handles key press event
-        global i
+        global time_index
         if event.key == 'right':
-            i = i + 1
+            time_index = time_index + 1
         elif event.key == 'left':
-            i = i - 1
-        y = data_interest[i, 0]
+            time_index = time_index - 1
+        y = data_interest[time_index, 0]
         plt.clf()
-        hori_cloud(y, i, cmap, norm, cloud_extent, tr, zr, data_name)
+        hori_cloud(y, time_index, cmap, norm, cloud_extent, tr, zr, data_name)
         plt.draw()
 
     fig = plt.figure()
@@ -63,3 +64,5 @@ def dynamic_hori_slice(data_interest, cmap, norm, cloud_extent, tr, zr, data_nam
     fig.canvas.mpl_connect('key_press_event', press)
     hori_cloud(y, 0, cmap, norm, cloud_extent, tr, zr, data_name)
     plt.draw()
+    global time_index
+    time_index = 0
