@@ -7,11 +7,14 @@ import numpy as np
 import matplotlib.ticker as mtick
 import matplotlib.colors as mcolors
 import pickle
+import sys
 from mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
 
 time_index = 0
+z_index = 0
 
 def get_color_nd_norm(type="lwc", c=[36, 5, 100, 17], b=[-10e-5,35e-5,1e-5]):
+
     #TODO: need to update / not a good way
     if(type=="zwind"):
         c = [70, 2, 100, 8]
@@ -24,13 +27,14 @@ def get_color_nd_norm(type="lwc", c=[36, 5, 100, 17], b=[-10e-5,35e-5,1e-5]):
     cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors)
     cmaplist = [cmap(i) for i in range(cmap.N)]
     cmap_cloud = cmap.from_list('Custom cmap', cmaplist, cmap.N)
-    bounds = np.arange(b[0], b[1], b[2]) #lwc rct bounds to find, zwind maybe -3.48 to 6.75
+    bounds = np.arange(b[0], b[1], b[2])
     idx = np.searchsorted(bounds, 0)
     bounds = np.insert(bounds, idx, 0)
     norm_cloud = mcolors.BoundaryNorm(bounds, cmap_cloud.N)
     return cmap_cloud, norm_cloud
 
 def hori_cloud(data, ti, cmap, norm, cloud_extent, tr, zr, data_name, zi=0):
+
     # Displays cloud horizontal cross section at fixed height and time
     # Inputs:
     #   data - zwind or lwc grid : shape (nx X ny)
@@ -58,8 +62,9 @@ def hori_cloud(data, ti, cmap, norm, cloud_extent, tr, zr, data_name, zi=0):
         cbar = plt.colorbar(fraction=0.0471, pad=0.01)
 
 def dynamic_hori_slice(data_interest, cmap, norm, cloud_extent, tr, zr, data_name="zwind"):
-    # Displays cloud horizontal cross section at fixed height
-    # and varying time with left/right key press
+
+    # Displays cloud horizontal cross section at varying height with up/down keys
+    # and time with left/right keys press
     # Inputs:
     #   data_interest - zwind or lwc data as 4D numpy array
     #   cmap - color map to use
@@ -67,27 +72,37 @@ def dynamic_hori_slice(data_interest, cmap, norm, cloud_extent, tr, zr, data_nam
     #   cloud_extent - [min(x), max(x), min(y), max(y)] in kms for plot
     #   tr - time range
     #   zr - height range
-    # Outputs: matplotlib at initial time -> press left/right arrows to navigate
+    # Outputs: cross section at at initial time & height
+    # -> press left/right arrows to navigate in time
+    # -> press up/down arrows to navigate in height
 
     def press(event):
         # Handles key press event
-        global time_index
+        global time_index, z_index
         if event.key == 'right':
             time_index = time_index + 1
         elif event.key == 'left':
             time_index = time_index - 1
-        y = data_interest[time_index, 0]
+        elif event.key == 'up':
+            z_index = z_index + 1
+        elif event.key == 'down':
+            z_index = z_index - 1
+        elif event.key == 'escape':
+            sys.exit(0)
+
+        y = data_interest[time_index, z_index]
         plt.clf()
-        hori_cloud(y, time_index, cmap, norm, cloud_extent, tr, zr, data_name)
+        hori_cloud(y, time_index, cmap, norm, cloud_extent, tr, zr, data_name, zi=z_index)
         plt.draw()
 
+    global time_index, z_index
     fig = plt.figure()
-    y = data_interest[0, 0]
+    y = data_interest[time_index, z_index]
     fig.canvas.mpl_connect('key_press_event', press)
-    hori_cloud(y, 0, cmap, norm, cloud_extent, tr, zr, data_name)
+    hori_cloud(y, time_index, cmap, norm, cloud_extent, tr, zr, data_name, zi=z_index)
     plt.draw()
-    global time_index
     time_index = 0
+    z_index = 0
 
 if __name__ == "__main__":
 
