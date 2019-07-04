@@ -714,5 +714,7 @@ cmap_cloud, norm_cloud = get_color_nd_norm("zwind")
 mf = np.array([]) # zero mean prior
 save_path = ""
 
-run_gp3D(save_path, zwind_data) #method 1
+
+#run_gp3D(save_path, zwind_data) #method 1
 #run_gp3D2(save_path, zwind_data) #method 2
+
