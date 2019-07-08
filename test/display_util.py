@@ -8,10 +8,14 @@ import matplotlib.ticker as mtick
 import matplotlib.colors as mcolors
 import pickle
 import sys
+from netCDF4 import MFDataset
+from nephelae_simulation.mesonh_interface import MesoNHVariable
 from mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
 
 time_index = 0
 z_index = 0
+var_lwc = 'RCT'
+var_zwind = 'WT'
 
 def get_color_nd_norm(type="lwc", c=[36, 5, 100, 17], b=[-10e-5,35e-5,1e-5]):
 
@@ -106,16 +110,16 @@ def dynamic_hori_slice(data_interest, cmap, norm, cloud_extent, tr, zr, data_nam
 
 if __name__ == "__main__":
 
-    ### If loading data from scratch
+    ### If loading data from scratch (old way)
     # path = "/net/skyscanner/volume1/data/mesoNH/ARM_OneHour3600files_No_Horizontal_Wind/"
     # mfiles = [path+"U0K10.1.min{:02d}.{:03d}_diaKCL.nc".format(minute, second)
-    #           for minute in range(1, 16) #orig 60
+    #           for minute in range(1, 16)
     #           for second in range(1, 61)]
     # atm = MesoNHAtmosphere(mfiles, 1)
     #
-    #lwc_data = atm.data['RCT'][349:449, 89:139, 90:160, 170:240]
-    #zwind_data = atm.data['WT'][349:449, 89:139, 90:160, 170:240]
-    #all_Zs = atm.data["VLEV"][:, 0, 0]
+    # lwc_data = atm.data['RCT'][349:449, 89:139, 90:160, 170:240]
+    # zwind_data = atm.data['WT'][349:449, 89:139, 90:160, 170:240]
+    # all_Zs = atm.data["VLEV"][:, 0, 0]
 
     # Saving Data
     # pickle_out = open("lwc_data_with_z.pickle", "wb")
@@ -130,26 +134,50 @@ if __name__ == "__main__":
 
     ##############
     # Load data ! In some env, without latin works=> so remove latin if needed
-    pickle_in = open("lwc_data_with_z.pickle", "rb")
-    lwc_data = pickle.load(pickle_in)  # , encoding='latin1')
-    pickle_in.close()
-    pickle_in = open("all_Zs.pickle", "rb")
-    all_Zs = pickle.load(pickle_in)  # , encoding='latin1')
-    pickle_in.close()
-    pickle_in = open("zwind_data_with_z.pickle", "rb")
-    zwind_data = pickle.load(pickle_in)  # , encoding='latin1')
-    pickle_in.close()
+    # pickle_in = open("lwc_data_with_z.pickle", "rb")
+    # lwc_data = pickle.load(pickle_in , encoding='latin1')
+    # pickle_in.close()
+    # pickle_in = open("all_Zs.pickle", "rb")
+    # all_Zs = pickle.load(pickle_in , encoding='latin1')
+    # pickle_in.close()
+    # pickle_in = open("zwind_data_with_z.pickle", "rb")
+    # zwind_data = pickle.load(pickle_in , encoding='latin1')
+    # pickle_in.close()
+    #
+    # xr = np.arange(0.005 + 90 * 0.01, 0.005 + 160 * 0.01, 0.01)
+    # yr = np.arange(0.005 + 170 * 0.01, 0.005 + 240 * 0.01, 0.01)
+    # zr = all_Zs[89:139] # fetch height array
+    # tr = np.arange(349, 449) # fetch time array
+    # cloud_extent = [xr[0], xr[-1], yr[0], yr[-1]]
 
-    xr = np.arange(0.005 + 90 * 0.01, 0.005 + 160 * 0.01, 0.01)
-    yr = np.arange(0.005 + 170 * 0.01, 0.005 + 240 * 0.01, 0.01)
-    zr = all_Zs[89:139] # fetch height array
-    tr = np.arange(349, 449) # fetch time array
-    cloud_extent = [xr[0], xr[-1], yr[0], yr[-1]]
+    # Integrating New Data Structure!
+    path = "/net/skyscanner/volume1/data/mesoNH/ARM_OneHour3600files_No_Horizontal_Wind/"
+    mfiles = [path+"U0K10.1.min{:02d}.{:03d}_diaKCL.nc".format(minute, second)
+              for minute in range(1, 16)
+              for second in range(1, 61)] #first 15 minutes data
+    atm = MFDataset(mfiles)
+
+    tvar = atm.variables['time'][:]
+    tvar = tvar - tvar[0]
+    xvar = atm.variables['W_E_direction'][:]
+    yvar = atm.variables['S_N_direction'][:]
+    zvar = np.squeeze(atm.variables['VLEV'][:, 0, 0])
+    data_lwc = MesoNHVariable(atm, var_lwc, interpolation='linear')
+
+    xr = xvar[90:160]
+    yr = yvar[170:240]
+    zr = zvar[89:139]
+    tr = tvar[349:449]
+
+    xyBounds = data_lwc[0.0, 5, slice(905, 1595, None), slice(1705, 2395, None)].bounds
+    xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
+
+    lwc_data = data_lwc[slice(349, 448), slice(1125, 1872), slice(905, 1595, None), slice(1705, 2395, None)].data
 
     #### Example 1 Zwind ######
-    cmap_cloud, norm_cloud = get_color_nd_norm("zwind")
-    dynamic_hori_slice(zwind_data, cmap_cloud, norm_cloud, cloud_extent, tr, zr, "zwind")
+    # cmap_cloud, norm_cloud = get_color_nd_norm("zwind")
+    # dynamic_hori_slice(zwind_data, cmap_cloud, norm_cloud, cloud_extent, tr, zr, "zwind")
 
     #### Example 2 lwc   ######
-    # cmap_cloud, norm_cloud = get_color_nd_norm("lwc")
-    # dynamic_hori_slice(lwc_data, cmap_cloud, norm_cloud, cloud_extent, tr, zr, "lwc")
+    cmap_cloud, norm_cloud = get_color_nd_norm("lwc")
+    dynamic_hori_slice(lwc_data, cmap_cloud, norm_cloud, xyExtent, tr, zr, "lwc")
