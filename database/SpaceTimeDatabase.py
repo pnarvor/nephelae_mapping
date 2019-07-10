@@ -89,9 +89,18 @@ class SpaceTimeList:
 
     """SpaceTimeList
 
-    Container to insert and retrieve data based on their space-time location.
+    Class to efficiently insert and retrieve data based on their space-time
+    location.
+
+    Heavily based on python3 bisect module.
 
     All data element are assumed to have the same interface as StbEntry
+
+    Base principle is to keep 4 list containing the same data but sorted along
+    each dimension of space time (seems an awful waste of memory but only
+    diplicate references to data are duplicated, not the data it self).
+    When a query is made, smaller lists are made from subsets of the main
+    list and the result is the common elements between the smaller lists.
 
     /!\ Changed to basic python implementation. To be continued
 
@@ -99,12 +108,19 @@ class SpaceTimeList:
 
     def __init__(self):
 
-        self.data = []
+        self.tSorted = []
+        self.xSorted = []
+        self.ySorted = []
+        self.zSorted = []
 
 
     def insert(self, data):
 
-        self.data.append(data)
+        # data assumed to be of a StbEntry compliant type
+        bi.insort(self.tSorted, StbSortableElement(data.position.t, data))
+        bi.insort(self.xSorted, StbSortableElement(data.position.x, data))
+        bi.insort(self.ySorted, StbSortableElement(data.position.y, data))
+        bi.insort(self.zSorted, StbSortableElement(data.position.z, data))
 
 
     def __getitem__(self, keys):
@@ -115,23 +131,37 @@ class SpaceTimeList:
                requested data
                There must exactly be 4 slices in the tuple
         """
+        
+        # # Supposedly less efficient way
+        # def isInSlice(value, key):
+        #     if key.start is not None:
+        #         if value < key.start:
+        #             return False
+        #     if key.stop is not None:
+        #         if value > key.stop:
+        #             return False
+        #     return True
+        # res = self.tSorted
+        # res = [item for item in res if isInSlice(item.position.t, keys[0])]
+        # res = [item for item in res if isInSlice(item.position.x, keys[1])]
+        # res = [item for item in res if isInSlice(item.position.y, keys[2])]
+        # res = [item.data for item in res if isInSlice(item.position.z, keys[3])]
+    
+        # Supposedly efficient way
+        # Using a python dict to remove duplicates
+        outputDict = {}
+        def extract_entries(sortedList, key, outputDict):
+            slc = slice(bi.bisect_left( sortedList, key.start),
+                        bi.bisect_right(sortedList, key.stop ), None)
+            for element in sortedList[slc]:
+                outputDict[id(element.data)] = element.data
 
-        def isInSlice(value, key):
-            if key.start is not None:
-                if value < key.start:
-                    return False
-            if key.stop is not None:
-                if value > key.stop:
-                    return False
-            return True
-            return value >= key.start and value <= key.stop
+        extract_entries(self.tSorted, keys[0], outputDict)
+        extract_entries(self.xSorted, keys[1], outputDict)
+        extract_entries(self.ySorted, keys[2], outputDict)
+        extract_entries(self.zSorted, keys[3], outputDict)
 
-        res = [item for item in self.data if isInSlice(item.position.t, keys[0])]
-        res = [item for item in res if isInSlice(item.position.x, keys[1])]
-        res = [item for item in res if isInSlice(item.position.y, keys[2])]
-        res = [item.data for item in res if isInSlice(item.position.z, keys[3])]
-
-        return res
+        return list(outputDict.values())
 
 
 class SpaceTimeDatabase:
@@ -150,7 +180,6 @@ class SpaceTimeDatabase:
         self.navFrame = None
         self.gps      = []
         self.samples  = []
-        self.
 
 
     def set_navigation_frame(self, navFrame):
