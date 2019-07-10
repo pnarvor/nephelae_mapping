@@ -39,10 +39,8 @@ def build_uav(uavId, navRef):
 interface = ppint.PprzSimulation(mesonhFiles,
                                  ['RCT', 'WT'],
                                  build_uav_callback=build_uav)
-# ### wind feedback only
-# interface = ppint.PprzSimulation(mesonhFiles, [], build_uav_callback=None)
 interface.start()
-# Hase to be called after interface.start()
+# Has to be called after interface.start()
 dtbase.set_navigation_frame(interface.navFrame)
 
 def stop():
