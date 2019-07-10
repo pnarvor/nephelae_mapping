@@ -1,15 +1,14 @@
 import numpy as np
 from nephelae_base.types import SensorSample
 
-from 
 
 class Database:
 
     """Database
 
     This is a test class for Nephelae raw Uav data server
-    (Hence the very original name). Made to match the subscriber pattern
-    used in nephelae_paparazzi.
+    (Hence the very well though name TODO: find a real one). 
+    Made to match the subscriber pattern used in nephelae_paparazzi.PprzUav.
 
     """
 
