@@ -10,7 +10,7 @@ from ivy.std_api import *
 import logging
 
 import nephelae_paparazzi.pprzinterface as ppint
-from database import Database
+from database import SpaceTimeDatabase
 
 mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc'
 
@@ -25,7 +25,7 @@ class Logger:
     def add_gps(self, gps):
         print(gps, end="\n\n")
 
-dtbase = Database()
+dtbase = SpaceTimeDatabase()
 def build_uav(uavId, navRef):
     uav = ppint.PprzMesoNHUav(uavId, navRef, mesonhFiles, ['RCT', 'WT'])
     uav.add_sensor_observer(dtbase)

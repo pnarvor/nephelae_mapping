@@ -1,1 +1,1 @@
-from .Database import Database
+from .SpaceTimeDatabase import SpaceTimeDatabase

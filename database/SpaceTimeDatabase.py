@@ -2,12 +2,13 @@ import numpy as np
 from nephelae_base.types import SensorSample
 
 
-class Database:
+class SpaceTimeDatabase:
 
-    """Database
+    """SpaceTimeDatabase
 
-    This is a test class for Nephelae raw Uav data server
-    (Hence the very well though name TODO: find a real one). 
+    This is a test class for Nephelae raw Uav data server.
+    Must handle space-time related requests like all data in a region of 
+    space-time. (Hence the very well though name TODO: find a real one). 
     Made to match the subscriber pattern used in nephelae_paparazzi.PprzUav.
 
     """
