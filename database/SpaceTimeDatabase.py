@@ -153,15 +153,17 @@ class SpaceTimeList:
             slc = slice(key_start, key_stop, None)
             for element in sortedList[slc]:
                 if all([tag in element.data.tags for tag in tags]):
+                    if id(element.data) not in outputDict.keys():
+                        outputDict[id(element.data)] = []
                     # Will insert if tags is empty (all returns True on empty list)
-                    outputDict[id(element.data)] = element.data
+                    outputDict[id(element.data)].append(element.data)
 
         extract_entries(self.tSorted, keys[0], outputDict)
         extract_entries(self.xSorted, keys[1], outputDict)
         extract_entries(self.ySorted, keys[2], outputDict)
         extract_entries(self.zSorted, keys[3], outputDict)
 
-        return list(outputDict.values())
+        return [l[0] for l in outputDict.values() if len(l) == 4]
 
 
 class SpaceTimeDatabase:
