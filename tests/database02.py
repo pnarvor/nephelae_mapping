@@ -18,14 +18,17 @@ mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.
 
 
 dtbase = NephelaeDatabase()
+
+# # uncomment this for feedback display (makes interpretor unusable)
+# logger = Logger()
+# dtbase.add_sensor_observer(logger)
+# dtbase.add_gps_observer(logger)
+
 def build_uav(uavId, navRef):
     uav = ppint.PprzMesoNHUav(uavId, navRef, mesonhFiles, ['RCT', 'WT'])
     uav.add_sensor_observer(dtbase)
     uav.add_gps_observer(dtbase)
     
-    # Uncomment this for data display
-    # uav.add_sensor_observer(Logger())
-    # uav.add_gps_observer(Logger())
     return uav
 
 
@@ -35,6 +38,8 @@ interface = ppint.PprzSimulation(mesonhFiles,
 interface.start()
 # Has to be called after interface.start()
 dtbase.set_navigation_frame(interface.navFrame)
+
+
 
 def stop():
     if interface.running:
