@@ -89,8 +89,8 @@ class SpaceTimeList:
 
     """SpaceTimeList
 
-    Class to efficiently insert and retrieve data based on their space-time
-    location.
+    Class to (supposedly) efficiently insert and retrieve data based on their
+    space-time location.
 
     Heavily based on python3 bisect module.
 
@@ -98,11 +98,10 @@ class SpaceTimeList:
 
     Base principle is to keep 4 list containing the same data but sorted along
     each dimension of space time (seems an awful waste of memory but only
-    diplicate references to data are duplicated, not the data it self).
+    duplicate references to data are duplicated, not the data it self).
     When a query is made, smaller lists are made from subsets of the main
     list and the result is the common elements between the smaller lists.
 
-    /!\ Changed to basic python implementation. To be continued
 
     """
 
@@ -123,7 +122,7 @@ class SpaceTimeList:
         bi.insort(self.zSorted, StbSortableElement(data.position.z, data))
 
 
-    def __getitem__(self, keys):
+    def find_entries(self, tags, keys=None):
 
         """SpaceTimeList.__getitem__
         keys : a tuple of slices(float,float,None)
@@ -131,22 +130,13 @@ class SpaceTimeList:
                requested data
                There must exactly be 4 slices in the tuple
         """
+
+        if keys is None:
+            keys = (slice(None,None,None),
+                    slice(None,None,None),
+                    slice(None,None,None),
+                    slice(None,None,None))
         
-        # # Supposedly less efficient way
-        # def isInSlice(value, key):
-        #     if key.start is not None:
-        #         if value < key.start:
-        #             return False
-        #     if key.stop is not None:
-        #         if value > key.stop:
-        #             return False
-        #     return True
-        # res = self.tSorted
-        # res = [item for item in res if isInSlice(item.position.t, keys[0])]
-        # res = [item for item in res if isInSlice(item.position.x, keys[1])]
-        # res = [item for item in res if isInSlice(item.position.y, keys[2])]
-        # res = [item.data for item in res if isInSlice(item.position.z, keys[3])]
-    
         # Supposedly efficient way
         # Using a python dict to remove duplicates
         outputDict = {}
@@ -154,7 +144,9 @@ class SpaceTimeList:
             slc = slice(bi.bisect_left( sortedList, key.start),
                         bi.bisect_right(sortedList, key.stop ), None)
             for element in sortedList[slc]:
-                outputDict[id(element.data)] = element.data
+                if all([tag in element.tags for tag in tags]):
+                    # Will insert if tags is empty (all returns True on empty list)
+                    outputDict[id(element.data)] = element.data
 
         extract_entries(self.tSorted, keys[0], outputDict)
         extract_entries(self.xSorted, keys[1], outputDict)
@@ -164,7 +156,7 @@ class SpaceTimeList:
         return list(outputDict.values())
 
 
-class SpaceTimeDatabase:
+class SpacetimeDatabase:
 
     """SpaceTimeDatabase
 
