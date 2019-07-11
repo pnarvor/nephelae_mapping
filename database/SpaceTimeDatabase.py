@@ -1,5 +1,6 @@
 # TODO TODO TODO TODO TODO TODO TODO
 # Search for a dedicated library to do this
+# Go search arounf pysqlite
 # TODO TODO TODO TODO TODO TODO TODO
 
 import numpy as np
@@ -122,7 +123,7 @@ class SpaceTimeList:
         bi.insort(self.zSorted, StbSortableElement(data.position.z, data))
 
 
-    def find_entries(self, tags, keys=None):
+    def find_entries(self, tags=[], keys=None):
 
         """SpaceTimeList.__getitem__
         keys : a tuple of slices(float,float,None)
@@ -141,10 +142,17 @@ class SpaceTimeList:
         # Using a python dict to remove duplicates
         outputDict = {}
         def extract_entries(sortedList, key, outputDict):
-            slc = slice(bi.bisect_left( sortedList, key.start),
-                        bi.bisect_right(sortedList, key.stop ), None)
+            if key.start is None:
+                key_start = None
+            else:
+                key_start = bi.bisect_left(sortedList, key.start)
+            if key.stop is None:
+                key_stop = None
+            else:
+                key_stop = bi.bisect_right(sortedList, key.stop)
+            slc = slice(key_start, key_stop, None)
             for element in sortedList[slc]:
-                if all([tag in element.tags for tag in tags]):
+                if all([tag in element.data.tags for tag in tags]):
                     # Will insert if tags is empty (all returns True on empty list)
                     outputDict[id(element.data)] = element.data
 
@@ -156,7 +164,7 @@ class SpaceTimeList:
         return list(outputDict.values())
 
 
-class SpacetimeDatabase:
+class SpaceTimeDatabase:
 
     """SpaceTimeDatabase
 
@@ -168,26 +176,61 @@ class SpacetimeDatabase:
     """
 
     def __init__(self):
-        
+        self.taggedData = {}
+
+
+    def insert(self, entry):
+        for tag in entry.tags:
+            if tag not in self.taggedData.keys():
+                self.taggedData[tag] = SpaceTimeList()
+            self.taggedData[tag].insert(entry)
+
+
+    def find_entries(self, tags=[], keys=None):
+        if not tags:
+            return self.taggedData.values()[0].find_entries(keys=keys)
+        else:
+            return self.taggedData[tags[0]].find_entries(tags, keys)
+
+
+class NephelaeDatabase(SpaceTimeDatabase):
+
+    """NephelaeDatabase
+
+    Subclass of SpaceTimeDatabe for specialization for Nephelae project
+
+    /!\ Find better name
+
+    """
+
+    def __init__(self):
+        super().__init__() 
         self.navFrame = None
         self.gps      = []
         self.samples  = []
-
+        
 
     def set_navigation_frame(self, navFrame):
         self.navFrame = navFrame
 
 
-    def add_gps(self, msg):
+    def add_gps(self, gps):
         if self.navFrame is None:
             return
-        self.gps.append(msg)
+        self.gps.append(gps)
+        tags=[str(gps.uavId), 'GPS']
+        self.insert(StbEntry(gps, gps - self.navFrame, tags))
 
 
-    def add_sample(self, msg):
+    def add_sample(self, sample):
+        # sample assumed to comply with nephelae_base.types.sensor_sample
         if self.navFrame is None:
             return
-        self.samples.append(msg)
-        
+        self.samples.append(sample)
+        tags=[str(sample.producer),
+              str(sample.variableName),
+              'SAMPLE']
+        self.insert(StbEntry(sample, sample.position, tags))
+
 
 
