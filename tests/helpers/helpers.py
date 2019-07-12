@@ -17,5 +17,8 @@ class Fancy:
         - Introduce overhead, mosly for convenient testing.
     """
     def __getitem__(self, keys):
-        return keys
+        if isinstance(keys, tuple):
+            return keys
+        else:
+            return (keys,)
 

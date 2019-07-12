@@ -127,6 +127,33 @@ class SpaceTimeList:
         bi.insort(self.zSorted, StbSortableElement(data.position.z, data))
 
 
+    def process_keys(self, keys):
+        
+        if keys is None:
+            return (slice(None), slice(None), slice(None), slice(None))
+        
+        keys = list(keys)
+        while len(keys) < 4:
+            keys.append(slice(None,None,None))
+
+        def process_key(key, sortedList):
+            if key is None:
+                return None
+            elif key < 0:
+                return sortedList[-1].index + key
+            else:
+                return key
+        
+        return (slice(process_key(keys[0].start, self.tSorted),
+                      process_key(keys[0].stop,  self.tSorted)),
+                slice(process_key(keys[1].start, self.xSorted),
+                      process_key(keys[1].stop,  self.xSorted)),
+                slice(process_key(keys[2].start, self.ySorted),
+                      process_key(keys[2].stop,  self.ySorted)),
+                slice(process_key(keys[3].start, self.zSorted),
+                      process_key(keys[3].stop,  self.zSorted)))
+
+
     def find_entries(self, tags=[], keys=None):
 
         """SpaceTimeList.__getitem__
@@ -136,12 +163,10 @@ class SpaceTimeList:
                There must exactly be 4 slices in the tuple
         """
 
-        if keys is None:
-            keys = (slice(None,None,None),
-                    slice(None,None,None),
-                    slice(None,None,None),
-                    slice(None,None,None))
-        
+        print("input keys  :", keys)
+        keys = self.process_keys(keys)
+        print("output keys :", keys)
+
         # Supposedly efficient way
         # Using a python dict to remove duplicates
         outputDict = {}
@@ -236,7 +261,11 @@ class SpaceTimeDatabase:
         self.taggedData = taggedData
 
 
-    def enable_periodic_save(self, path, timerTick=60.0):
+    def enable_periodic_save(self, path, timerTick=60.0, force=False):
+        if not force and os.path.exists(path):
+            raise ValueError("Path \"" + path + "\" already exists. "
+                             "Please delete the file, pick another path "
+                             "or force overwritting with force=True")
         self.saveTimerTick = timerTick
         self.savePath      = path
         self.saveTimer = threading.Timer(self.saveTimerTick,
