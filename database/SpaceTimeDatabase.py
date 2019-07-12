@@ -5,6 +5,8 @@
 
 import numpy as np
 import bisect as bi
+import pickle
+import os
 
 from nephelae_base.types import Position
 from nephelae_base.types import SensorSample
@@ -178,11 +180,35 @@ class SpaceTimeDatabase:
 
     """
 
+    # class member functions #####################################
+
+    # def serialize(database):
+    #     return pickle.dump(self)
+
+
+    # def unserialize(stream):
+    #     return pickle.load(stream)
+
+
+    def save(database, path):
+        if os.path.exists(path):
+            raise ValueError("Path \"" + path + "\" already exists. "
+                             "Please delete the file or pick another path.")
+        pickle.dump(database, open(path, "wb"))
+
+    
+    def load(path):
+        return pickle.load(open(path, "rb"))
+
+    # instance member functions #################################
+
     def __init__(self):
         self.taggedData = {}
+        self.taggedData['ALL'] = SpaceTimeList()
 
 
     def insert(self, entry):
+        self.taggedData['ALL'].insert(entry)
         for tag in entry.tags:
             if tag not in self.taggedData.keys():
                 self.taggedData[tag] = SpaceTimeList()
@@ -191,9 +217,18 @@ class SpaceTimeDatabase:
 
     def find_entries(self, tags=[], keys=None):
         if not tags:
-            return self.taggedData.values()[0].find_entries(keys=keys)
+            return self.taggedData['ALL'].find_entries(keys=keys)
         else:
             return self.taggedData[tags[0]].find_entries(tags, keys)
+
+
+    def __getstate__(self):
+        return self.taggedData
+  
+
+    def __setstate__(self, taggedData):
+        self.taggedData = taggedData
+    
 
 
 class NephelaeDatabase(SpaceTimeDatabase):
@@ -249,6 +284,14 @@ class NephelaeDatabase(SpaceTimeDatabase):
     def add_sensor_observer(self, observer):
         self.observerSet.attach_observer(observer, 'add_sample')
 
+
+    def __getstate__(self):
+        return [self.navFrame, super().__getstate__()]
+  
+
+    def __setstate__(self, data):
+        self.navFrame = data[0]
+        super().__setstate__(data[1])
 
 
 
