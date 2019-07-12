@@ -7,6 +7,7 @@ import numpy as np
 import bisect as bi
 import pickle
 import os
+import threading
 
 from nephelae_base.types import Position
 from nephelae_base.types import SensorSample
@@ -102,7 +103,7 @@ class SpaceTimeList:
 
     Base principle is to keep 4 list containing the same data but sorted along
     each dimension of space time (seems an awful waste of memory but only
-    duplicate references to data are duplicated, not the data it self).
+    duplicate references to data are duplicated, not the data itself).
     When a query is made, smaller lists are made from subsets of the main
     list and the result is the common elements between the smaller lists.
 
@@ -190,21 +191,26 @@ class SpaceTimeDatabase:
     #     return pickle.load(stream)
 
 
-    def save(database, path):
-        if os.path.exists(path):
-            raise ValueError("Path \"" + path + "\" already exists. "
-                             "Please delete the file or pick another path.")
-        pickle.dump(database, open(path, "wb"))
-
     
     def load(path):
         return pickle.load(open(path, "rb"))
 
+
+    def save(database, path, force=False):
+        if not force and os.path.exists(path):
+            raise ValueError("Path \"" + path + "\" already exists. "
+                             "Please delete the file, pick another path "
+                             "or force overwritting with force=True")
+        pickle.dump(database, open(path + '.part', "wb"))
+        # this for not to erase the previously saved database in case of failure
+        os.rename(path + '.part', path)
+
+
     # instance member functions #################################
 
     def __init__(self):
-        self.taggedData = {}
-        self.taggedData['ALL'] = SpaceTimeList()
+        self.taggedData = {'ALL': SpaceTimeList()}
+        self.saveTime = None
 
 
     def insert(self, entry):
@@ -228,7 +234,28 @@ class SpaceTimeDatabase:
 
     def __setstate__(self, taggedData):
         self.taggedData = taggedData
+
+
+    def enable_periodic_save(self, path, timerTick=60.0):
+        self.saveTimerTick = timerTick
+        self.savePath      = path
+        self.saveTimer = threading.Timer(self.saveTimerTick,
+                                         self.periodic_save_do)
+        self.saveTimer.start()
+
+
+    def disable_periodic_save(self):
+        if self.saveTimer is not None:
+            self.saveTimer.cancel()
+        self.saveTimer = None
+
     
+    def periodic_save_do(self):
+        SpaceTimeDatabase.save(self, self.savePath, force=True)
+        if self.saveTimer is not None: # check if disable was called
+            self.saveTimer = threading.Timer(self.saveTimerTick,
+                                             self.periodic_save_do)
+            self.saveTimer.start()
 
 
 class NephelaeDatabase(SpaceTimeDatabase):

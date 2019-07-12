@@ -18,6 +18,7 @@ mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.
 
 
 dtbase = NephelaeDatabase()
+dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0)
 
 # # uncomment this for feedback display (makes interpretor unusable)
 # logger = Logger()
@@ -46,6 +47,7 @@ def stop():
         print("Shutting down... ", end='')
         sys.stdout.flush()
         interface.stop()
+        dtbase.disable_periodic_save()
         print("Complete.")
 signal.signal(signal.SIGINT, lambda sig,fr: stop())
 
