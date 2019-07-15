@@ -24,8 +24,9 @@ class NephelaeDataServer(SpatializedDatabase):
     def __init__(self):
         super().__init__() 
 
-        self.navFrame = None
+        self.navFrame    = None
         self.observerSet = MultiObserverSubject(['add_gps', 'add_sample'])
+        self.uavIds      = []
        
         # For debug, to be removed
         self.gps      = []
@@ -40,8 +41,11 @@ class NephelaeDataServer(SpatializedDatabase):
         self.observerSet.add_gps(gps)
         if self.navFrame is None:
             return
+        uavId = str(gps.uavId)
+        if uavId not in self.uavIds:
+            self.uavIds.append(uavId)
         self.gps.append(gps)
-        tags=[str(gps.uavId), 'GPS']
+        tags=[uavId, 'GPS']
         self.insert(SpbEntry(gps, gps - self.navFrame, tags))
 
 
