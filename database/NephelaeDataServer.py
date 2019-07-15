@@ -74,17 +74,21 @@ class NephelaeDataServer(SpatializedDatabase):
         super().__setstate__(data[1])
 
 
-class DatabasePlayer:
+class DatabasePlayer(NephelaeDataServer):
 
     """DatabasePlayer
     
     Class to replay messages stored in a NephelaeDataServer save.
+    
+    As a subclass of NephelaeDataServer it can be used as a dataserver for
+    mapping and inteface testing.
 
     """
 
-    def __init__(self, databasePath, timeFactor=1.0, granularity=0.01):
+    def __init__(self, databasePath, timeFactor=1.0, granularity=0.005):
+        super().__init__()
         
-        self.database     = SpatializedDatabase.load(databasePath)
+        self.origin       = SpatializedDatabase.load(databasePath)
         self.timeFactor   = timeFactor
         self.granularity  = granularity
         self.running      = False
@@ -92,6 +96,8 @@ class DatabasePlayer:
         self.replayData   = []
         self.replayThread = None
         self.replayLock   = threading.Lock()
+
+        self.set_navigation_frame(self.origin.navFrame)
 
 
     def play(self):
@@ -120,7 +126,7 @@ class DatabasePlayer:
     def init_replay(self):
         with self.replayLock:
             self.currentTime = 0.0
-            sourceList = self.database.taggedData['ALL'].tSorted
+            sourceList = self.origin.taggedData['ALL'].tSorted
             self.replayData = [entry for entry in sourceList]
 
     
@@ -133,7 +139,7 @@ class DatabasePlayer:
                 ellapsed = time.time() - lastTime
                 self.currentTime = self.currentTime + self.timeFactor*ellapsed
                 while self.replayData[0].index <= self.currentTime:
-                    self.notify(self.replayData[0].data.data)
+                    self.process_replayed_entry(self.replayData[0].data)
                     self.replayData.pop(0)
                     if not self.replayData:
                         break
@@ -143,8 +149,14 @@ class DatabasePlayer:
         self.running = False
 
 
-    def notify(self, data):
-        print(data)
+    def process_replayed_entry(self, entry):
+        if 'GPS' in entry.tags: 
+            self.add_gps(entry.data)
+        elif 'SAMPLE' in entry.tags:
+            self.add_sample(entry.data)
+        else:
+            raise ValueError("No GPS or SAMPLE tag found in entry."+
+                             "Are you using a valid database ?")
 
 
 

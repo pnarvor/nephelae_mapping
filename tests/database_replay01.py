@@ -15,6 +15,11 @@ from helpers.helpers import *
 
 
 dtbase = DatabasePlayer('output/database01_10min.neph')
+
+logger = Logger()
+dtbase.add_gps_observer(logger)
+dtbase.add_sensor_observer(logger)
+
 dtbase.play()
 
 signal.signal(signal.SIGINT, lambda sig, frame: dtbase.stop())
