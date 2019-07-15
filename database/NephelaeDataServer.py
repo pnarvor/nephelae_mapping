@@ -70,12 +70,22 @@ class NephelaeDataServer(SpatializedDatabase):
 
 
     def __getstate__(self):
-        return [self.navFrame, super().__getstate__()]
+        serializedItems = {}
+        serializedItems['navFrame'] = self.navFrame
+        serializedItems['uavIds']   = self.uavIds
+        serializedItems['data']     = super().__getstate__()
+        return serializedItems
   
 
     def __setstate__(self, data):
-        self.navFrame = data[0]
-        super().__setstate__(data[1])
+        try:
+            self.navFrame = data['navFrame']
+            self.uavIds   = data['uavIds']
+            super().__setstate__(data['data'])
+        except Exception as e:
+            print("Exception happenned during database load."
+                  "File is probably corrupted or is of an older version.")
+            raise e
 
 
 class DatabasePlayer(NephelaeDataServer):

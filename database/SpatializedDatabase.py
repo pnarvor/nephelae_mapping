@@ -249,11 +249,11 @@ class SpatializedDatabase:
 
 
     def __getstate__(self):
-        return self.taggedData
+        return {'taggedData':self.taggedData}
   
 
-    def __setstate__(self, taggedData):
-        self.taggedData = taggedData
+    def __setstate__(self, deserializedData):
+        self.taggedData = deserializedData['taggedData']
 
 
     def enable_periodic_save(self, path, timerTick=60.0, force=False):
