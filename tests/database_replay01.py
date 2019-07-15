@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 import os
 import signal
 import time
@@ -9,12 +9,12 @@ import time
 from ivy.std_api import *
 import logging
 
-from database import DatabasePlayer
+from nephelae_mapping.database import DatabasePlayer
 
 from helpers.helpers import *
 
 
-dtbase = DatabasePlayer('output/database01_10min.neph')
+dtbase = DatabasePlayer('output/database01.neph')
 
 logger = Logger()
 dtbase.add_gps_observer(logger)

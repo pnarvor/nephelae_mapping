@@ -1,11 +1,11 @@
 #! /usr/bin/python3
 
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 # import bisect
 from bisect import *
 
-from database import StbSortableElement
+from nephelae_mapping.database import StbSortableElement
 
 class DataStruct:
 

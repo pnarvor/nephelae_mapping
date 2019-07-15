@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 import os
 import signal
 import time
@@ -10,7 +10,7 @@ from ivy.std_api import *
 import logging
 
 import nephelae_paparazzi.pprzinterface as ppint
-from database import NephelaeDataServer
+from nephelae_mapping.database import NephelaeDataServer
 
 from helpers.helpers import *
 
