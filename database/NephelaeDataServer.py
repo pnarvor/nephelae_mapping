@@ -1,9 +1,14 @@
+import threading
+import time
+
 from nephelae_base.types import Position
 from nephelae_base.types import SensorSample
 from nephelae_base.types import MultiObserverSubject
 
 from .SpatializedDatabase import SpatializedDatabase
 from .SpatializedDatabase import SpbEntry
+
+# from nephelae_base.types import ObserverSubject
 
 
 class NephelaeDataServer(SpatializedDatabase):
@@ -67,4 +72,79 @@ class NephelaeDataServer(SpatializedDatabase):
     def __setstate__(self, data):
         self.navFrame = data[0]
         super().__setstate__(data[1])
+
+
+class DatabasePlayer:
+
+    """DatabasePlayer
+    
+    Class to replay messages stored in a NephelaeDataServer save.
+
+    """
+
+    def __init__(self, databasePath, timeFactor=1.0, granularity=0.01):
+        
+        self.database     = SpatializedDatabase.load(databasePath)
+        self.timeFactor   = timeFactor
+        self.granularity  = granularity
+        self.running      = False
+        self.currentTime  = 0.0
+        self.replayData   = []
+        self.replayThread = None
+        self.replayLock   = threading.Lock()
+
+
+    def play(self):
+        if not self.running:
+            self.restart()
+        else:
+            print("Replay already running.",
+                  "Call 'restart' if you want to start it again")
+
+    def stop(self):
+        if self.running and self.replayThread is not None:
+            print("Stopping replay... ", end='')
+            self.running = False
+            self.replayThread.join()
+            print("Done.")
+
+
+    def restart(self):
+        if self.running:
+            self.init_replay()
+        else:
+            self.replayThread = threading.Thread(target=self.run)
+            self.replayThread.start()
+
+
+    def init_replay(self):
+        with self.replayLock:
+            self.currentTime = 0.0
+            sourceList = self.database.taggedData['ALL'].tSorted
+            self.replayData = [entry for entry in sourceList]
+
+    
+    def run(self):
+        self.init_replay()
+        lastTime = time.time()
+        self.running = True
+        while self.running and self.replayData:
+            with self.replayLock:
+                ellapsed = time.time() - lastTime
+                self.currentTime = self.currentTime + self.timeFactor*ellapsed
+                while self.replayData[0].index <= self.currentTime:
+                    self.notify(self.replayData[0].data.data)
+                    self.replayData.pop(0)
+                    if not self.replayData:
+                        break
+
+            lastTime = lastTime + ellapsed
+            time.sleep(self.granularity)
+        self.running = False
+
+
+    def notify(self, data):
+        print(data)
+
+
 

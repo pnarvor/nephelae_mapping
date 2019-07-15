@@ -180,7 +180,7 @@ class SpatializedList:
                 if all([tag in element.data.tags for tag in tags]):
                     if id(element.data) not in outputDict.keys():
                         outputDict[id(element.data)] = []
-                    # Will insert if tags is empty (all returns True on empty list)
+                    # Will insert if tags is empty (all([]) returns True)
                     outputDict[id(element.data)].append(element.data)
 
         extract_entries(self.tSorted, keys[0], outputDict)
