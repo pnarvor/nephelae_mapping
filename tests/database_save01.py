@@ -10,7 +10,7 @@ from ivy.std_api import *
 import logging
 
 import nephelae_paparazzi.pprzinterface as ppint
-from database import NephelaeDatabase
+from database import NephelaeDataServer
 
 from helpers.helpers import *
 
@@ -21,7 +21,7 @@ mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.
 # paparazzi simulation (not necessarily launched before this script
 # use ctrl-c or send a SIGINT to stop (stoping take sa few seconds)
 
-dtbase = NephelaeDatabase()
+dtbase = NephelaeDataServer()
 # /!\ An output folder named './output' must exists before hand
 dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0, force=True)
 

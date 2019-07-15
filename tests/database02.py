@@ -10,14 +10,14 @@ from ivy.std_api import *
 import logging
 
 import nephelae_paparazzi.pprzinterface as ppint
-from database import NephelaeDatabase
+from database import NephelaeDataServer
 
 from helpers.helpers import *
 
 mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc'
 
 
-dtbase = NephelaeDatabase()
+dtbase = NephelaeDataServer()
 dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0)
 
 # # uncomment this for feedback display (makes interpretor unusable)

@@ -9,16 +9,12 @@ import pickle
 import os
 import threading
 
-from nephelae_base.types import Position
-from nephelae_base.types import SensorSample
-from nephelae_base.types import MultiObserverSubject
 
+class SpbEntry:
 
-class StbEntry:
+    """SpbEntry
 
-    """StbEntry
-
-    Aim to unify the elements in the SpaceTimeDatabase.
+    Aim to unify the elements in the SpatializedDatabase.
     Contains a space-time location and at least one tag.
 
     """
@@ -30,9 +26,9 @@ class StbEntry:
         self.tags     = tags
 
 
-class StbSortableElement:
+class SpbSortableElement:
 
-    """StbSortableElement
+    """SpbSortableElement
 
     Intended to be used as a generic container in sorted lists.
     Contains a single index value to use for sorting and a data sample.
@@ -54,56 +50,56 @@ class StbSortableElement:
         return '{'+str(self.index)+' '+str(self.data)+'}'
 
     def __lt__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index < other.index
         else:
             return self.index < other
 
     def __le__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index <= other.index
         else:
             return self.index <= other
 
     def __eq__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index == other.index
         else:
             return self.index == other
 
     def __ne__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index != other.index
         else:
             return self.index != other
 
     def __ge__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index >= other.index
         else:
             return self.index >= other
 
     def __gt__(self, other):
-        if isinstance(other, StbSortableElement):
+        if isinstance(other, SpbSortableElement):
             return self.index > other.index
         else:
             return self.index > other
 
 
-class SpaceTimeList:
+class SpatializedList:
 
-    """SpaceTimeList
+    """SpatializedList
 
     Class to (supposedly) efficiently insert and retrieve data based on their
     space-time location.
 
     Heavily based on python3 bisect module.
 
-    All data element are assumed to have the same interface as StbEntry
+    All data element are assumed to have the same interface as SpbEntry
 
     Base principle is to keep 4 list containing the same data but sorted along
     each dimension of space time (seems an awful waste of memory but only
-    duplicate references to data are duplicated, not the data itself).
+    references to data are duplicated, not the data itself).
     When a query is made, smaller lists are made from subsets of the main
     list and the result is the common elements between the smaller lists.
 
@@ -120,11 +116,11 @@ class SpaceTimeList:
 
     def insert(self, data):
 
-        # data assumed to be of a StbEntry compliant type
-        bi.insort(self.tSorted, StbSortableElement(data.position.t, data))
-        bi.insort(self.xSorted, StbSortableElement(data.position.x, data))
-        bi.insort(self.ySorted, StbSortableElement(data.position.y, data))
-        bi.insort(self.zSorted, StbSortableElement(data.position.z, data))
+        # data assumed to be of a SpbEntry compliant type
+        bi.insort(self.tSorted, SpbSortableElement(data.position.t, data))
+        bi.insort(self.xSorted, SpbSortableElement(data.position.x, data))
+        bi.insort(self.ySorted, SpbSortableElement(data.position.y, data))
+        bi.insort(self.zSorted, SpbSortableElement(data.position.z, data))
 
 
     def process_keys(self, keys):
@@ -156,7 +152,7 @@ class SpaceTimeList:
 
     def find_entries(self, tags=[], keys=None):
 
-        """SpaceTimeList.__getitem__
+        """SpatializedList.__getitem__
         keys : a tuple of slices(float,float,None)
                slices values are bounds of a 4D cube in which are the
                requested data
@@ -195,9 +191,9 @@ class SpaceTimeList:
         return [l[0] for l in outputDict.values() if len(l) == 4]
 
 
-class SpaceTimeDatabase:
+class SpatializedDatabase:
 
-    """SpaceTimeDatabase
+    """SpatializedDatabase
 
     This is a test class for Nephelae raw Uav data server.
     Must handle space-time related requests like all data in a region of 
@@ -208,13 +204,12 @@ class SpaceTimeDatabase:
 
     # class member functions #####################################
 
-    # def serialize(database):
-    #     return pickle.dump(self)
+    def serialize(database):
+        return pickle.dump(self)
 
 
-    # def unserialize(stream):
-    #     return pickle.load(stream)
-
+    def unserialize(stream):
+        return pickle.load(stream)
 
     
     def load(path):
@@ -234,7 +229,7 @@ class SpaceTimeDatabase:
     # instance member functions #################################
 
     def __init__(self):
-        self.taggedData = {'ALL': SpaceTimeList()}
+        self.taggedData = {'ALL': SpatializedList()}
         self.saveTime = None
 
 
@@ -242,7 +237,7 @@ class SpaceTimeDatabase:
         self.taggedData['ALL'].insert(entry)
         for tag in entry.tags:
             if tag not in self.taggedData.keys():
-                self.taggedData[tag] = SpaceTimeList()
+                self.taggedData[tag] = SpatializedList()
             self.taggedData[tag].insert(entry)
 
 
@@ -280,74 +275,13 @@ class SpaceTimeDatabase:
 
     
     def periodic_save_do(self):
-        SpaceTimeDatabase.save(self, self.savePath, force=True)
+        SpatializedDatabase.save(self, self.savePath, force=True)
         if self.saveTimer is not None: # check if disable was called
             self.saveTimer = threading.Timer(self.saveTimerTick,
                                              self.periodic_save_do)
             self.saveTimer.start()
 
 
-class NephelaeDatabase(SpaceTimeDatabase):
-
-    """NephelaeDatabase
-
-    Subclass of SpaceTimeDatabe for specialization for Nephelae project
-
-    /!\ Find better name
-
-    """
-
-    def __init__(self):
-        super().__init__() 
-
-        self.navFrame = None
-        self.observerSet = MultiObserverSubject(['add_gps', 'add_sample'])
-       
-        # For debug, to be removed
-        self.gps      = []
-        self.samples  = []
-
-
-    def set_navigation_frame(self, navFrame):
-        self.navFrame = navFrame
-
-
-    def add_gps(self, gps):
-        self.observerSet.add_gps(gps)
-        if self.navFrame is None:
-            return
-        self.gps.append(gps)
-        tags=[str(gps.uavId), 'GPS']
-        self.insert(StbEntry(gps, gps - self.navFrame, tags))
-
-
-    def add_sample(self, sample):
-        # sample assumed to comply with nephelae_base.types.sensor_sample
-        self.observerSet.add_sample(sample)
-        if self.navFrame is None:
-            return
-        self.samples.append(sample)
-        tags=[str(sample.producer),
-              str(sample.variableName),
-              'SAMPLE']
-        self.insert(StbEntry(sample, sample.position, tags))
-
-
-    def add_gps_observer(self, observer):
-        self.observerSet.attach_observer(observer, 'add_gps')
-
-
-    def add_sensor_observer(self, observer):
-        self.observerSet.attach_observer(observer, 'add_sample')
-
-
-    def __getstate__(self):
-        return [self.navFrame, super().__getstate__()]
-  
-
-    def __setstate__(self, data):
-        self.navFrame = data[0]
-        super().__setstate__(data[1])
 
 
 

@@ -9,14 +9,14 @@ import time
 from ivy.std_api import *
 import logging
 
-from database import NephelaeDatabase
+from database import NephelaeDataServer
 
 from helpers.helpers import *
 
 
 # Example loading a previously saved nephelae database
 # see tests/database_save01.py to see how it was generated
-dtbase = NephelaeDatabase.load('output/database01.neph')
+dtbase = NephelaeDataServer.load('output/database01.neph')
 
 # Database is read using tags and time-space keys (t,x,y,z) 
 # Only data containing all the tags are taken from the database
