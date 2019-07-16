@@ -27,7 +27,8 @@ dtbase.set_navigation_frame(pmsg.NavigationRef("100 NAVIGATION_REF 0.0 0.0 31 0.
 dtbase.navFrame.stamp = 0.0
 
 uavIds   = ['100', '101', '102', '103', '104']
-varNames = ['var0', 'var1', 'var2', 'var3', 'var4']
+varPeriod= 5
+varNames = ['var_'+str(i) for i in range(5*varPeriod)]
 gpsSig  = 2000.0
 dataSig = 10.0
 N = 5*3600
@@ -51,11 +52,12 @@ try:
                        ' 0 0 0 0 31 0')
             gps.stamp = n
             dtbase.add_gps(gps)
-    
-            for var in varNames:
-                sample = SensorSample(var, uavId, n, gps - dtbase.navFrame, 
-                                      [random.gauss(0.0, dataSig)])
-                dtbase.add_sample(sample)
+            
+            if n % varPeriod == 0:
+                for var in varNames:
+                    sample = SensorSample(var, uavId, n, gps - dtbase.navFrame, 
+                                          [random.gauss(0.0, dataSig)])
+                    dtbase.add_sample(sample)
     
 finally:    
     fig, axes = plt.subplots(1,1)
@@ -65,7 +67,8 @@ finally:
     axes.grid()
     plt.show(block=False)
     # dtbase.disable_periodic_save()
-    dtbase.save('output/database_perf02.neph', True)
+    # dtbase.save('output/database_perf02.neph', True)
+    dtbase.save('output/database_perf03.neph', True)
 
 
 

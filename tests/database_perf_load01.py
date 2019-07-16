@@ -16,7 +16,8 @@ from helpers.helpers import *
 print("loading database... ", end='', flush=True)
 t0 = time.time()
 # dtbase = NephelaeDataServer.load('output/database_perf01.neph')
-dtbase = NephelaeDataServer.load('output/database_perf02.neph')
+# dtbase = NephelaeDataServer.load('output/database_perf02.neph')
+dtbase = NephelaeDataServer.load('output/database_perf03.neph')
 t1 = time.time()
 print("Done. (ellapsed : ", t1 - t0,")", flush=True)
 
@@ -31,5 +32,24 @@ for i in range(10):
 t1 = time.time()
 print("Done. (ellapsed : ", t1 - t0,")", flush=True)
 
+print("Reading database... ", flush=True)
+t0 = time.time()
+for i in range(10):
+    output = [entry.data for entry in dtbase.find_entries(['101','var_0'],
+                                        Fancy()[0:10.0,0:10.0,0:10.0,0:10.0])]
+    # for item in output:
+    #      print(item)
+t1 = time.time()
+print("Done. (ellapsed : ", t1 - t0,")", flush=True)
+
+print("Reading database... ", flush=True)
+t0 = time.time()
+for i in range(10):
+    output = [entry.data for entry in dtbase.find_entries(['var_0','101'],
+                                        Fancy()[0:10.0,0:10.0,0:10.0,0:10.0])]
+    # for item in output:
+    #      print(item)
+t1 = time.time()
+print("Done. (ellapsed : ", t1 - t0,")", flush=True)
 
 

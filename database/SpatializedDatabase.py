@@ -114,6 +114,10 @@ class SpatializedList:
         self.zSorted = []
 
 
+    def __len__(self):
+        return len(self.tSorted)
+
+
     def insert(self, data):
 
         # data assumed to be of a SpbEntry compliant type
@@ -159,9 +163,9 @@ class SpatializedList:
                There must exactly be 4 slices in the tuple
         """
 
-        print("input keys  :", keys)
+        # print("input keys  :", keys)
         keys = self.process_keys(keys)
-        print("output keys :", keys)
+        # print("output keys :", keys)
 
         # Supposedly efficient way
         # Using a python dict to remove duplicates
@@ -235,6 +239,9 @@ class SpatializedDatabase:
 
     def init_data(self):
         self.taggedData = {'ALL': SpatializedList()}
+        self.orderedTags       = ['ALL']
+        self.lastTagOrdering   = -1
+        self.tagOrderingPeriod = 1000
 
 
     def insert(self, entry):
@@ -243,13 +250,17 @@ class SpatializedDatabase:
             if tag not in self.taggedData.keys():
                 self.taggedData[tag] = SpatializedList()
             self.taggedData[tag].insert(entry)
+        self.check_tag_ordering()
 
 
     def find_entries(self, tags=[], keys=None):
         if not tags:
             return self.taggedData['ALL'].find_entries(keys=keys)
         else:
-            return self.taggedData[tags[0]].find_entries(tags, keys)
+            for tag in self.orderedTags:
+                if tag in tags:
+                    return self.taggedData[tag].find_entries(tags, keys)
+            return self.taggedData['ALL'].find_entries(tags, keys=keys)
 
 
     def __getstate__(self):
@@ -257,7 +268,9 @@ class SpatializedDatabase:
   
 
     def __setstate__(self, deserializedData):
+        self.init_data()
         self.taggedData = deserializedData['taggedData']
+        self.check_tag_ordering()
 
 
     def enable_periodic_save(self, path, timerTick=60.0, force=False):
@@ -272,6 +285,7 @@ class SpatializedDatabase:
         self.saveTimer.start()
 
 
+        
     def disable_periodic_save(self):
         if self.saveTimer is not None:
             self.saveTimer.cancel()
@@ -285,7 +299,14 @@ class SpatializedDatabase:
                                              self.periodic_save_do)
             self.saveTimer.start()
 
-
-
-
+    
+    def check_tag_ordering(self):
+        if not 0 <= self.lastTagOrdering < self.tagOrderingPeriod:
+            insertsSinceLinceLastTagOrdering = 0
+            tags = []
+            for tag in self.taggedData.keys():
+                tags.append(SpbSortableElement(len(self.taggedData[tag]), tag))
+            tags.sort()
+            self.orderedTags = [tag.data for tag in tags]
+        self.lastTagOrdering = self.lastTagOrdering + 1
 
