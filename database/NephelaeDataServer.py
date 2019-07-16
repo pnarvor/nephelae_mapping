@@ -24,9 +24,10 @@ class NephelaeDataServer(SpatializedDatabase):
     def __init__(self):
         super().__init__() 
 
-        self.navFrame    = None
-        self.observerSet = MultiObserverSubject(['add_gps', 'add_sample'])
-        self.uavIds      = []
+        self.navFrame      = None
+        self.observerSet   = MultiObserverSubject(['add_gps', 'add_sample'])
+        self.uavIds        = []
+        self.variableNames = []
        
         # For debug, to be removed
         self.gps      = []
@@ -59,7 +60,8 @@ class NephelaeDataServer(SpatializedDatabase):
               str(sample.variableName),
               'SAMPLE']
         self.insert(SpbEntry(sample, sample.position, tags))
-
+        if str(sample.variableName) not in self.variableNames:
+            self.variableNames.append(str(sample.variableName))
 
     def add_gps_observer(self, observer):
         self.observerSet.attach_observer(observer, 'add_gps')
@@ -71,16 +73,24 @@ class NephelaeDataServer(SpatializedDatabase):
 
     def __getstate__(self):
         serializedItems = {}
-        serializedItems['navFrame'] = self.navFrame
-        serializedItems['uavIds']   = self.uavIds
-        serializedItems['data']     = super().__getstate__()
+        serializedItems['navFrame']      = self.navFrame
+        serializedItems['uavIds']        = self.uavIds
+        serializedItems['variableNames'] = self.variableNames
+        serializedItems['data']          = super().__getstate__()
         return serializedItems
   
 
     def __setstate__(self, data):
         try:
             self.navFrame = data['navFrame']
-            self.uavIds   = data['uavIds']
+            if 'uavIds' in data.keys():
+                self.uavIds = data['uavIds']
+            else:
+                self.uavIds = []
+            if 'variableNames' in data.keys():
+                self.variableNames = data['variableNames']
+            else:
+                self.variableNames = []
             super().__setstate__(data['data'])
         except Exception as e:
             print("Exception happenned during database load."
