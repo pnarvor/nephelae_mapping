@@ -6,6 +6,9 @@ import numpy as np
 import math as m
 import matplotlib.pyplot as plt
 from matplotlib import animation
+import matplotlib
+# matplotlib.use("Agg")
+# plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
 
 from netCDF4 import MFDataset
 
@@ -56,13 +59,19 @@ varDisp0 = plt.imshow(data0[tStart, z0, xySlice, xySlice].data, cmap=plt.cm.viri
 #                              extent=xyExtent)
 # varDisp3 = axes[1][1].imshow(data1[0.0, zSlice, y0, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xzExtent)
 
-xi = 423
+xi = 1000
 yi = 4300
 s_w = 8 # wind speed
 theta = 0 # angle(speed vector, x axis)
-radius = 50
-v_circle = 1200 # speed in circle
+radius = 500
+v_circle = 2500 # speed in circle
 end_reach = False
+
+# for lemniscate trajectories
+rot_active = False
+angles = [45,90,135]
+rot_angle = 0
+sub_factor = 0
 
 def line_trajectory(xi, yi, t, theta=0, s=20):
     x_new = xi + s * np.cos(np.radians(theta)) * t
@@ -74,6 +83,24 @@ def circ_trajectory(xc, yc, t, r, v=1000):
     x_new = xc + r * np.cos(np.radians(w * t))
     y_new = yc + r * np.sin(np.radians(w * t))
     return x_new, y_new
+
+def lemniscate_trajectory(xc, yc, t, r, v=1000):
+    alpha = r
+    w = v / r
+    x_new = xc + alpha * np.sqrt(2) * np.cos(np.radians(90+w * t)) / (np.sin(np.radians(90+w * t)) ** 2 + 1)
+    y_new = yc + alpha * np.sqrt(2) * np.cos(np.radians(90+w * t)) * np.sin(np.radians(90+w * t)) / (np.sin(np.radians(90+w * t)) ** 2 + 1)
+    return x_new, y_new
+
+def rotate(origin, point, angle):
+    """
+    Rotate a point counterclockwise by a given angle around a given origin.
+    The angle should be given in radians.
+    """
+    ox, oy = origin
+    px, py = point
+    qx = ox + m.cos(angle) * (px - ox) - m.sin(angle) * (py - oy)
+    qy = oy + m.sin(angle) * (px - ox) + m.cos(angle) * (py - oy)
+    return qx, qy
 
 def init():
     # axes[0][0].scatter(xi, yi, c="white", marker="x", s=20)
@@ -88,18 +115,36 @@ def init():
 def update(i):
 
     t = tStart+ i+ 1
-    print(t)
+    #print(t)
     varDisp0.set_data(data0[t, z0, xySlice, xySlice].data)
     # varDisp1.set_data(data0[t, zSlice, y0, xySlice].data)
     # varDisp2.set_data(data1[t, z0, xySlice, xySlice].data)
     # varDisp3.set_data(data1[t, zSlice, y0, xySlice].data)
 
-    global end_reach
+    global end_reach, rot_active, sub_factor, angles, rot_angle
 
     if (end_reach == False):
-        xn, yn = circ_trajectory(xi, yi, t - tStart, radius, v_circle)
+
+        xn, yn = lemniscate_trajectory(xi, yi, t - tStart - sub_factor, radius, v_circle)
+        xc, yc = xn, yn
+
+        if (rot_active):
+            xn, yn = rotate((xi, yi), (xn, yn), m.radians(rot_angle))
+        if (int(xc) == xi and int(yc) == yi):
+            rot_active = True
+            sub_factor = i
+            if (angles):
+                rot_angle = angles.pop(0)
+            else:
+                rot_active = False
+                angles = [45, 90, 135]
+                rot_angle = 0
+                sub_factor = 0
+
+        # Circular + wind
+        #xn, yn = circ_trajectory(xi, yi, t - tStart, radius, v_circle)
         xn, yn = line_trajectory(xn, yn, t - tStart, theta, s_w) # adding wind speed
-        print(xn, yn)
+
         if (xn >= xyExtent[1] - 200 or yn >= xyExtent[3] - 200):
             end_reach = True
         else:
@@ -111,5 +156,9 @@ anim = animation.FuncAnimation(
     init_func=init,
     frames=len(xvar) * len(yvar),
     interval=1)
+
+# Writer = animation.writers['ffmpeg']
+# writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+# anim.save('circle_flight.mp4', writer=writer)
 
 plt.show(block=False)
