@@ -290,6 +290,7 @@ class SpatializedDatabase:
         if self.saveTimer is not None:
             self.saveTimer.cancel()
         self.saveTimer = None
+        self.periodic_save_do()
 
     
     def periodic_save_do(self):

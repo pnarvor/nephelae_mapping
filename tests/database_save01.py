@@ -23,7 +23,7 @@ mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.
 
 dtbase = NephelaeDataServer()
 # /!\ An output folder named './output' must exists before hand
-dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0, force=True)
+dtbase.enable_periodic_save('output/database02.neph', timerTick=60.0, force=True)
 
 # # uncomment this for feedback display (makes command unusable)
 # logger = Logger()
@@ -39,7 +39,7 @@ def build_uav(uavId, navRef):
 
 
 interface = ppint.PprzSimulation(mesonhFiles,
-                                 ['RCT', 'WT'],
+                                 ['RCT', 'UT', 'VT', 'WT'],
                                  build_uav_callback=build_uav)
 interface.start()
 # Has to be called after interface.start()
