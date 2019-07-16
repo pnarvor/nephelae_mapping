@@ -229,8 +229,12 @@ class SpatializedDatabase:
     # instance member functions #################################
 
     def __init__(self):
-        self.taggedData = {'ALL': SpatializedList()}
         self.saveTime = None
+        self.init_data()
+   
+
+    def init_data(self):
+        self.taggedData = {'ALL': SpatializedList()}
 
 
     def insert(self, entry):

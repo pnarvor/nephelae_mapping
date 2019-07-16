@@ -20,7 +20,7 @@ logger = Logger()
 dtbase.add_gps_observer(logger)
 dtbase.add_sensor_observer(logger)
 
-dtbase.play()
+dtbase.play(looped=True)
 
 signal.signal(signal.SIGINT, lambda sig, frame: dtbase.stop())
 

@@ -110,12 +110,14 @@ class DatabasePlayer(NephelaeDataServer):
         self.replayData   = []
         self.replayThread = None
         self.replayLock   = threading.Lock()
+        self.looped       = False
 
         self.set_navigation_frame(self.origin.navFrame)
 
 
-    def play(self):
+    def play(self, looped=False):
         if not self.running:
+            self.looped = looped
             self.restart()
         else:
             print("Replay already running.",
@@ -124,6 +126,7 @@ class DatabasePlayer(NephelaeDataServer):
     def stop(self):
         if self.running and self.replayThread is not None:
             print("Stopping replay... ", end='')
+            self.looped  = False
             self.running = False
             self.replayThread.join()
             print("Done.")
@@ -161,6 +164,9 @@ class DatabasePlayer(NephelaeDataServer):
             lastTime = lastTime + ellapsed
             time.sleep(self.granularity)
         self.running = False
+        if self.looped:
+            self.init_data()
+            self.restart()
 
 
     def process_replayed_entry(self, entry):
