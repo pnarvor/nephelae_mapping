@@ -154,7 +154,7 @@ class SpatializedList:
                       process_key(keys[3].stop,  self.zSorted)))
 
 
-    def find_entries(self, tags=[], keys=None):
+    def find_entries(self, tags=[], keys=None, sortCriteria=None):
 
         """SpatializedList.__getitem__
         keys : a tuple of slices(float,float,None)
@@ -191,8 +191,12 @@ class SpatializedList:
         extract_entries(self.xSorted, keys[1], outputDict)
         extract_entries(self.ySorted, keys[2], outputDict)
         extract_entries(self.zSorted, keys[3], outputDict)
-
-        return [l[0] for l in outputDict.values() if len(l) == 4]
+        
+        if sortCriteria is None:
+            return [l[0] for l in outputDict.values() if len(l) == 4]
+        else:
+            return sorted([l[0] for l in outputDict.values() if len(l) == 4],
+                          key=sortCriteria)
 
 
 class SpatializedDatabase:
@@ -253,14 +257,17 @@ class SpatializedDatabase:
         self.check_tag_ordering()
 
 
-    def find_entries(self, tags=[], keys=None):
+    def find_entries(self, tags=[], keys=None, sortCriteria=None):
         if not tags:
-            return self.taggedData['ALL'].find_entries(keys=keys)
+            return self.taggedData['ALL'].find_entries(
+                keys=keys, sortCriteria=sortCriteria)
         else:
             for tag in self.orderedTags:
                 if tag in tags:
-                    return self.taggedData[tag].find_entries(tags, keys)
-            return self.taggedData['ALL'].find_entries(tags, keys=keys)
+                    return self.taggedData[tag].find_entries(
+                        tags, keys, sortCriteria=sortCriteria)
+            return self.taggedData['ALL'].find_entries(
+                tags, keys=keys, sortCriteria=sortCriteria)
 
 
     def __getstate__(self):
