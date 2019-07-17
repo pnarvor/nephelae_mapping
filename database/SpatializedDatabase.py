@@ -147,7 +147,31 @@ class SpatializedList:
         keys = list(keys)
         while len(keys) < 4:
             keys.append(slice(None))
-        return tuple(keys)
+
+        def process_key(key, sortedList):
+            if not isinstance(key, slice):
+                raise ValueError("key must be a slice")
+            if sortedList is None:
+                return slice(None)
+            if key.step is None:
+                return key
+            if key.step >= 0:
+                return key
+            
+            if key.start is None:
+                key_start = None
+            else:
+                key_start = sortedList[-1].index + key.start
+            if key.stop is None:
+                key_stop = None
+            else:
+                key_stop = sortedList[-1].index + key.stop
+            return slice(key_start, key_stop)
+	    
+        return (process_key(keys[0], self.tSorted),
+                process_key(keys[1], self.xSorted),
+                process_key(keys[2], self.ySorted),
+                process_key(keys[3], self.zSorted))
 
 
     def build_entry_dict(self, tags=[], keys=None):
