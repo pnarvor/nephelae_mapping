@@ -192,11 +192,10 @@ class SpatializedList:
         extract_entries(self.ySorted, keys[2], outputDict)
         extract_entries(self.zSorted, keys[3], outputDict)
         
-        if sortCriteria is None:
-            return [l[0] for l in outputDict.values() if len(l) == 4]
-        else:
-            return sorted([l[0] for l in outputDict.values() if len(l) == 4],
-                          key=sortCriteria)
+        res = [l[0] for l in outputDict.values() if len(l) == 4]
+        if sortCriteria is not None:
+            res.sort(key=sortCriteria)
+        return res
 
 
 class SpatializedDatabase:
