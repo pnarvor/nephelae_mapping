@@ -147,7 +147,7 @@ class SpatializedList:
             keys.append(slice(None,None,None))
 
         def process_key(key, sortedList):
-            if key is None:
+            if key is None or sortedList is None:
                 return None
             elif key < 0:
                 return sortedList[-1].index + key
@@ -173,15 +173,10 @@ class SpatializedList:
                There must exactly be 4 slices in the tuple
         """
         
-        print("Finding entries, tags :", tags)
-        # print("input keys  :", keys)
         keys = self.process_keys(keys)
-        for t,x,y,z in zip(self.tSorted, self.xSorted, self.ySorted, self.zSorted):
-            print("t:",t.data.tags,"x:",x.data.tags,"y:",y.data.tags,"z:",z.data.tags)
-        # print("output keys :", keys)
 
-        # Supposedly efficient way
         # Using a python dict to remove duplicates
+        # Supposedly efficient way
         outputDict = {}
         def extract_entries(sortedList, key, outputDict):
             if key.start is None:
@@ -204,7 +199,7 @@ class SpatializedList:
         extract_entries(self.xSorted, keys[1], outputDict)
         extract_entries(self.ySorted, keys[2], outputDict)
         extract_entries(self.zSorted, keys[3], outputDict)
-        
+
         res = [l[0] for l in outputDict.values() if len(l) == 4]
         if sortCriteria is not None:
             res.sort(key=sortCriteria)
@@ -279,7 +274,6 @@ class SpatializedDatabase:
         else:
             for tag in self.orderedTags:
                 if tag in tags:
-                    print("Found tag :", tag)
                     return self.taggedData[tag].find_entries(
                         tags, keys, sortCriteria=sortCriteria)
             return self.taggedData['ALL'].find_entries(
