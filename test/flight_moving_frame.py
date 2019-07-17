@@ -39,7 +39,7 @@ z0 = 1075.0
 y0 = 4500.0
 xySlice = slice(xvar[0]+0.5, xvar[-1]-0.5, None)
 #zSlice = slice(0.0, 12000.0, None)
-tStart = 150 # initial timestamp
+tStart = 70 # initial timestamp
 
 xyBounds = data0[0.0, z0, xySlice, xySlice].bounds
 xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
@@ -59,19 +59,23 @@ varDisp0 = plt.imshow(data0[tStart, z0, xySlice, xySlice].data, cmap=plt.cm.viri
 #                              extent=xyExtent)
 # varDisp3 = axes[1][1].imshow(data1[0.0, zSlice, y0, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xzExtent)
 
-xi = 1000
-yi = 4300
+xi = 400
+yi = 2100
 s_w = 8 # wind speed
 theta = 0 # angle(speed vector, x axis)
-radius = 500
-v_circle = 2500 # speed in circle
+radius = 100
+v_circle = 400 # speed in circle
 end_reach = False
 
 # for lemniscate trajectories
 rot_active = False
-angles = [45,90,135]
+angles = [90, 45, 135]
+colors = ["red", "green", "blue", "yellow", "black"]
+color = "white"
 rot_angle = 0
 sub_factor = 0
+xf = 0
+yf = 0
 
 def line_trajectory(xi, yi, t, theta=0, s=20):
     x_new = xi + s * np.cos(np.radians(theta)) * t
@@ -87,8 +91,8 @@ def circ_trajectory(xc, yc, t, r, v=1000):
 def lemniscate_trajectory(xc, yc, t, r, v=1000):
     alpha = r
     w = v / r
-    x_new = xc + alpha * np.sqrt(2) * np.cos(np.radians(90+w * t)) / (np.sin(np.radians(90+w * t)) ** 2 + 1)
-    y_new = yc + alpha * np.sqrt(2) * np.cos(np.radians(90+w * t)) * np.sin(np.radians(90+w * t)) / (np.sin(np.radians(90+w * t)) ** 2 + 1)
+    x_new = xc + alpha * np.sqrt(2) * np.cos(np.radians(90+ (w * t))) / (np.sin(np.radians(90+ (w * t))) ** 2 + 1)
+    y_new = yc + alpha * np.sqrt(2) * np.cos(np.radians(90+ (w * t))) * np.sin(np.radians(90+ (w * t))) / (np.sin(np.radians(90+ (w * t))) ** 2 + 1)
     return x_new, y_new
 
 def rotate(origin, point, angle):
@@ -114,47 +118,53 @@ def init():
 
 def update(i):
 
-    t = tStart+ i+ 1
-    #print(t)
+    t = tStart + i
+
     varDisp0.set_data(data0[t, z0, xySlice, xySlice].data)
     # varDisp1.set_data(data0[t, zSlice, y0, xySlice].data)
     # varDisp2.set_data(data1[t, z0, xySlice, xySlice].data)
     # varDisp3.set_data(data1[t, zSlice, y0, xySlice].data)
 
-    global end_reach, rot_active, sub_factor, angles, rot_angle
+    global end_reach, rot_active, sub_factor, angles, rot_angle, xf, yf, colors, color
 
     if (end_reach == False):
 
-        xn, yn = lemniscate_trajectory(xi, yi, t - tStart - sub_factor, radius, v_circle)
+        xn, yn = lemniscate_trajectory(xi, yi, i - sub_factor, radius, v_circle)
         xc, yc = xn, yn
+        print(t, sub_factor, i-sub_factor, xf, yf, xc, yc)
+        if (xc==xf and yc==yf):
+            rot_active = True
+            sub_factor = i - 1
+            print(angles, colors)
+            if (angles):
+                rot_angle = angles.pop(0)
+                color =colors.pop(0)
+            else:
+                rot_active = False
+                angles = [90, 45, 135]
+                rot_angle = 0
+                color = "white"
+                colors = ["red", "green", "blue", "yellow", "black"]
 
         if (rot_active):
             xn, yn = rotate((xi, yi), (xn, yn), m.radians(rot_angle))
-        if (int(xc) == xi and int(yc) == yi):
-            rot_active = True
-            sub_factor = i
-            if (angles):
-                rot_angle = angles.pop(0)
-            else:
-                rot_active = False
-                angles = [45, 90, 135]
-                rot_angle = 0
-                sub_factor = 0
-
+        if(i==1):
+            xf, yf = xc, yc
+        #print(xi, yi, i - sub_factor, xc, yc, rot_active)
         # Circular + wind
-        #xn, yn = circ_trajectory(xi, yi, t - tStart, radius, v_circle)
-        xn, yn = line_trajectory(xn, yn, t - tStart, theta, s_w) # adding wind speed
+        #xn, yn = circ_trajectory(xi, yi, i , radius, v_circle)
+        xn, yn = line_trajectory(xn, yn, i , theta, s_w) # adding wind speed
 
         if (xn >= xyExtent[1] - 200 or yn >= xyExtent[3] - 200):
             end_reach = True
         else:
-           plt.scatter(xn, yn, c="white", marker="x", s=15)
+           plt.scatter(xn, yn, c=color, marker="x", s=15)
 
 anim = animation.FuncAnimation(
     fig,
     update,
     init_func=init,
-    frames=len(xvar) * len(yvar),
+    frames= range(1,len(xvar) * len(yvar)),
     interval=1)
 
 # Writer = animation.writers['ffmpeg']
