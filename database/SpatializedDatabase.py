@@ -26,6 +26,16 @@ class SpbEntry:
         self.tags     = tags
 
 
+    def __eq__(self, other):
+        if self.position != other.position:
+            return False
+        elif self.tags != other.tags:
+            return False
+        elif str(self.data) != str(other.data):
+            return False
+        return True
+
+
 class SpbSortableElement:
 
     """SpbSortableElement
@@ -162,9 +172,12 @@ class SpatializedList:
                requested data
                There must exactly be 4 slices in the tuple
         """
-
+        
+        print("Finding entries, tags :", tags)
         # print("input keys  :", keys)
         keys = self.process_keys(keys)
+        for t,x,y,z in zip(self.tSorted, self.xSorted, self.ySorted, self.zSorted):
+            print("t:",t.data.tags,"x:",x.data.tags,"y:",y.data.tags,"z:",z.data.tags)
         # print("output keys :", keys)
 
         # Supposedly efficient way
@@ -257,12 +270,16 @@ class SpatializedDatabase:
 
 
     def find_entries(self, tags=[], keys=None, sortCriteria=None):
+        # Making sure we have a list of tags, event with one element
+        if isinstance(tags, str):
+            tags = [tags]
         if not tags:
             return self.taggedData['ALL'].find_entries(
                 keys=keys, sortCriteria=sortCriteria)
         else:
             for tag in self.orderedTags:
                 if tag in tags:
+                    print("Found tag :", tag)
                     return self.taggedData[tag].find_entries(
                         tags, keys, sortCriteria=sortCriteria)
             return self.taggedData['ALL'].find_entries(
