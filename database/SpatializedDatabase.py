@@ -9,6 +9,7 @@ import pickle
 import os
 import threading
 
+from nephelae_base.types import Bounds
 
 class SpbEntry:
 
@@ -141,32 +142,17 @@ class SpatializedList:
         
         if keys is None:
             return (slice(None), slice(None), slice(None), slice(None))
-        
+        if len(keys) == 4: 
+            return keys
         keys = list(keys)
         while len(keys) < 4:
-            keys.append(slice(None,None,None))
-
-        def process_key(key, sortedList):
-            if key is None or sortedList is None:
-                return None
-            elif key < 0:
-                return sortedList[-1].index + key
-            else:
-                return key
-        
-        return (slice(process_key(keys[0].start, self.tSorted),
-                      process_key(keys[0].stop,  self.tSorted)),
-                slice(process_key(keys[1].start, self.xSorted),
-                      process_key(keys[1].stop,  self.xSorted)),
-                slice(process_key(keys[2].start, self.ySorted),
-                      process_key(keys[2].stop,  self.ySorted)),
-                slice(process_key(keys[3].start, self.zSorted),
-                      process_key(keys[3].stop,  self.zSorted)))
+            keys.append(slice(None))
+        return tuple(keys)
 
 
-    def find_entries(self, tags=[], keys=None, sortCriteria=None):
+    def build_entry_dict(self, tags=[], keys=None):
 
-        """SpatializedList.__getitem__
+        """
         keys : a tuple of slices(float,float,None)
                slices values are bounds of a 4D cube in which are the
                requested data
@@ -175,7 +161,7 @@ class SpatializedList:
         
         keys = self.process_keys(keys)
 
-        # Using a python dict to remove duplicates
+        # Using a python dict to be able to remove duplicates
         # Supposedly efficient way
         outputDict = {}
         def extract_entries(sortedList, key, outputDict):
@@ -200,10 +186,44 @@ class SpatializedList:
         extract_entries(self.ySorted, keys[2], outputDict)
         extract_entries(self.zSorted, keys[3], outputDict)
 
+        return outputDict
+
+
+    def find_entries(self, tags=[], keys=None, sortCriteria=None):
+
+        """
+        keys : a tuple of slices(float,float,None)
+               slices values are bounds of a 4D cube in which are the
+               requested data
+               There must exactly be 4 slices in the tuple
+        """
+        
+        outputDict = self.build_entry_dict(tags, keys)
         res = [l[0] for l in outputDict.values() if len(l) == 4]
         if sortCriteria is not None:
             res.sort(key=sortCriteria)
         return res
+
+
+    def find_bounds(self, tags=[], keys=None):
+
+        """
+        keys : a tuple of slices(float,float,None)
+               slices values are bounds of a 4D cube in which are the
+               requested data
+               There must exactly be 4 slices in the tuple
+        """
+        
+        outputDict = self.build_entry_dict(tags, keys)
+        bounds = [Bounds(), Bounds(), Bounds(), Bounds()]
+        for l in outputDict.values():
+            if len(l) != 4:
+                continue
+            bounds[0].update(l[0].data.position.t)
+            bounds[1].update(l[0].data.position.x)
+            bounds[2].update(l[0].data.position.y)
+            bounds[3].update(l[0].data.position.z)
+        return bounds
 
 
 class SpatializedDatabase:
@@ -264,20 +284,28 @@ class SpatializedDatabase:
         self.check_tag_ordering()
 
 
+    def best_search_list(self, tags=[]):
+        if not tags:
+            return self.taggedData['ALL']
+        else:
+            for tag in self.orderedTags:
+                if tag in tags:
+                    return self.taggedData[tag]
+            return self.taggedData['ALL']
+        
+
     def find_entries(self, tags=[], keys=None, sortCriteria=None):
         # Making sure we have a list of tags, event with one element
         if isinstance(tags, str):
             tags = [tags]
-        if not tags:
-            return self.taggedData['ALL'].find_entries(
-                keys=keys, sortCriteria=sortCriteria)
-        else:
-            for tag in self.orderedTags:
-                if tag in tags:
-                    return self.taggedData[tag].find_entries(
-                        tags, keys, sortCriteria=sortCriteria)
-            return self.taggedData['ALL'].find_entries(
-                tags, keys=keys, sortCriteria=sortCriteria)
+        return self.best_search_list(tags).find_entries(tags, keys, sortCriteria)
+
+
+    def find_bounds(self, tags=[], keys=None):
+        # Making sure we have a list of tags, event with one element
+        if isinstance(tags, str):
+            tags = [tags]
+        return self.best_search_list(tags).find_bounds(tags, keys)
 
 
     def __getstate__(self):
