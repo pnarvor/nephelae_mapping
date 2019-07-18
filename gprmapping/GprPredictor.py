@@ -14,9 +14,6 @@ class GprPredictor:
 
     No kernel parameters is optimised, kernel is given as a fixed parameter.
 
-    This class also keeps a kind of history of sensor data in the form of
-    precomputed posterior distribution given the observation. Also keeps the
-    observation, as they are needed for prediction.
     """
 
     def __init__(self, trainLocations, trainValues, kernel, noiseStd):

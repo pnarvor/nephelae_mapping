@@ -11,7 +11,8 @@ from nephelae_mapping.gprmapping import GprPredictor
 from sklearn.gaussian_process import kernels as gpk
 
 
-noiseStd = 1.0
+# noiseStd = 1.0
+noiseStd = 0.1
 # a        = 10.0
 a        = 2.0
 f0       = 3.0
