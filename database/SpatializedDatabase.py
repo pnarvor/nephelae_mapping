@@ -288,7 +288,7 @@ class SpatializedDatabase:
     # instance member functions #################################
 
     def __init__(self):
-        self.saveTime = None
+        self.saveTimer = None
         self.init_data()
    
 
@@ -357,9 +357,9 @@ class SpatializedDatabase:
         
     def disable_periodic_save(self):
         if self.saveTimer is not None:
+            self.periodic_save_do()
             self.saveTimer.cancel()
         self.saveTimer = None
-        self.periodic_save_do()
 
     
     def periodic_save_do(self):

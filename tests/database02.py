@@ -18,7 +18,7 @@ mesonhFiles = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.
 
 
 dtbase = NephelaeDataServer()
-dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0)
+# dtbase.enable_periodic_save('output/database01.neph', timerTick=10.0)
 
 # # uncomment this for feedback display (makes interpretor unusable)
 # logger = Logger()
