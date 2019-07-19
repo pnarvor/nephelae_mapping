@@ -3,8 +3,6 @@ import numpy as np
 from nephelae_base.types import Bounds
 
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process import kernels as gpk
-# from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 
 class GprPredictor:
 
