@@ -32,7 +32,6 @@ class GprPredictor:
                                                      copy_X_train=False)
         self.gprProcessor.fit(trainLocations, trainValues.reshape(-1,1))
 
-
     def __call__(self, locations):
         return self.gprProcessor.predict(locations, return_std=True)
                                                      

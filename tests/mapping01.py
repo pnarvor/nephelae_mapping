@@ -80,7 +80,7 @@ def update(i):
     axes.grid()
     axes.legend(loc='upper right')
 
-    time.sleep(3)
+    time.sleep(1.5)
 
 anim = animation.FuncAnimation(
     fig,
