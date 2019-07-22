@@ -10,7 +10,7 @@ import pickle
 import sys
 from netCDF4 import MFDataset
 from nephelae_simulation.mesonh_interface import MesoNHVariable
-from mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
+from nephelae_mapping.test.mesonh_atm.mesonh_atmosphere import MesoNHAtmosphere
 
 time_index = 0
 z_index = 0
