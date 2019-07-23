@@ -8,30 +8,8 @@ import numpy as np
 from netCDF4 import MFDataset
 from matplotlib import animation
 import matplotlib
+from nephelae_mapping.test.util import load_pickle
 
-def load_window_size(dataset_path, x_indices, y_indices):
-
-    atm = MFDataset(dataset_path)
-    xvar = 1000.0 * atm.variables['W_E_direction'][:]
-    yvar = 1000.0 * atm.variables['S_N_direction'][:]
-
-    # As in GT window
-    x_extent = xvar[x_indices[0] : x_indices[1]]
-    y_extent = yvar[y_indices[0] : y_indices[1]]
-    return x_extent, y_extent
-
-def load_samples(coord_pickle, var_pickle):
-    #load coordinates + var (LWC, VWind) from pickle##
-
-    pickle_in = open(coord_pickle, "rb")
-    coordinates = pickle.load(pickle_in) #, encoding='latin1')
-    pickle_in.close()
-
-    pickle_in = open(var_pickle, "rb")
-    interest_var = pickle.load(pickle_in) #, encoding='latin1')
-    pickle_in.close()
-
-    return coordinates, interest_var
 
 def plot_sampled_points(coord, interest_var, x_extent, y_extent, data_extent, data_unit, save_fig = False):
 
@@ -110,17 +88,23 @@ def show_map(pred_grid, xy_extent, data_unit, data_extent, time_stamp):
 
 if __name__ == "__main__":
 
-    coord, lwc_data = load_samples("coord.pickle", "lwc_data.pickle")
+    coord = load_pickle("coord")
+    lwc_data = load_pickle("lwc_data")
+
+    #coord, lwc_data = load_samples("coord.pickle", "lwc_data.pickle")
 
     lwc_extent = [0, 4.5e-4] # range of lwc
     lwc_unit = "kg a/kg w"
     noise_std = 1e-6
     zero_thresholding = True
 
-    x_extent, y_extent = load_window_size("/net/skyscanner/volume1/data/Nephelae/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc", [60,150], [164,186])
+    x_extent = load_pickle("xExtent")
+    y_extent = load_pickle("yExtent")
+    #x_extent, y_extent = load_window_size("/net/skyscanner/volume1/data/Nephelae/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc", [60,150], [164,186])
 
     # Plot GT points
-    plot_sampled_points(coord, lwc_data, x_extent, y_extent, lwc_extent, lwc_unit, save_fig = False)
+    save_sample_points = True
+    plot_sampled_points(coord, lwc_data, x_extent, y_extent, lwc_extent, lwc_unit, save_fig = save_sample_points)
 
     # Add noise to data
     lwc_data =  noisy_samples(lwc_data, noise_std, zero_thresholding)
@@ -148,12 +132,16 @@ if __name__ == "__main__":
     # show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
 
     ##======2. Fit GPR each second and predict map/s ========
-    anim_save = True
+    anim_save = False
     if(anim_save):
         matplotlib.use("Agg")
         plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
 
     fig, pred_var = show_map( np.zeros(test_grid.shape[:2]), [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, 0)
+
+    def init():
+        #do nothing
+        pass
 
     def update(t):
         gpr = fit_gpr(coord[:t+1], lwc_data[:t+1], kernel, noise_std, 0)
@@ -169,6 +157,7 @@ if __name__ == "__main__":
         fig,
         update,
         frames=range(len(lwc_data)),
+        init_func=init,
         repeat=False,
         interval=200,
         )
