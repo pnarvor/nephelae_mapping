@@ -6,6 +6,8 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from netCDF4 import MFDataset
+from matplotlib import animation
+import matplotlib
 
 def load_window_size(dataset_path, x_indices, y_indices):
 
@@ -95,7 +97,7 @@ def show_map(pred_grid, xy_extent, data_unit, data_extent, time_stamp):
     plt.title("Prediction at t = %ds" % (time_stamp))
     plt.xlabel("x coordinate")
     plt.ylabel("y coordinate")
-    plt.imshow(pred_grid.T, origin='lower', extent=xy_extent, cmap=plt.cm.viridis)
+    pred_var = plt.imshow(pred_grid.T, origin='lower', extent=xy_extent, cmap=plt.cm.viridis)
 
     cbar = plt.colorbar(fraction=0.0471, pad=0.01)
     cbar.ax.set_title(data_unit, pad=14)
@@ -103,6 +105,8 @@ def show_map(pred_grid, xy_extent, data_unit, data_extent, time_stamp):
     cbar.update_ticks()
     plt.clim(data_extent[0], data_extent[1])
     plt.tight_layout()
+    return fig, pred_var
+
 
 if __name__ == "__main__":
 
@@ -127,14 +131,52 @@ if __name__ == "__main__":
     lengthscale = [50, 50, 20]
     lengthscale_bounds = [(5, 500), (5, 500), (1, 300)]
 
+    # Define Kernel
     kernel = RBF_kernel(sigma_f, sigma_f_bounds, lengthscale, lengthscale_bounds)
-    gpr = fit_gpr(coord, lwc_data, kernel, noise_std, 0)
-
-    # Test Data
-    test_time_stamp = coord[-1, 2] # second of last sample
     test_2D_coords, test_grid = get_2d_test_grid(x_extent, y_extent)
-    test_3D_data =  get_3d_test_data(test_2D_coords, test_time_stamp)
 
-    # Predict and show map
-    pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
-    show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
+    ##======1. Fit GPR on all gathered points and predict the whole map at last second!========
+    # gpr = fit_gpr(coord, lwc_data, kernel, noise_std, 0)
+    #
+    # # Test Data
+    # test_time_stamp = coord[-1, 2] # second(timestamp) of last sample
+    # test_2D_coords, test_grid = get_2d_test_grid(x_extent, y_extent)
+    # test_3D_data =  get_3d_test_data(test_2D_coords, test_time_stamp)
+    #
+    # # Predict and show map
+    # pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
+    # show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
+
+    ##======2. Fit GPR each second and predict map/s ========
+    anim_save = True
+    if(anim_save):
+        matplotlib.use("Agg")
+        plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
+
+    fig, pred_var = show_map( np.zeros(test_grid.shape[:2]), [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, 0)
+
+    def update(t):
+        gpr = fit_gpr(coord[:t+1], lwc_data[:t+1], kernel, noise_std, 0)
+        test_time_stamp = coord[t, 2]  # second(timestamp) of last sample
+        test_3D_data = get_3d_test_data(test_2D_coords, test_time_stamp)
+
+        pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
+        pred_var.set_data(pred_grid.T)
+        plt.title("Prediction at t = %ds, lengthscales=(%dm, %dm, %ds), sigma_f=%.2e %s" % (test_time_stamp, lengthscale[0], lengthscale[1], lengthscale[2], sigma_f, lwc_unit))
+        plt.scatter(coord[t, 0], coord[t, 1], c="white", marker="x", s=15)
+
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        frames=range(len(lwc_data)),
+        repeat=False,
+        interval=200,
+        )
+
+    if(anim_save):
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
+        anim.save('predict_3d.mp4', writer=writer)
+    else:
+        plt.show(block=False)
+    print("done")
