@@ -9,10 +9,13 @@ from   matplotlib import animation
 import time
 
 from nephelae_mapping.gprmapping import GprKernel
+from nephelae_mapping.gprmapping import NephKernel
 from sklearn.gaussian_process import kernels as gpk
 
-kernel = GprKernel(gpk.RBF(np.array([1.0,2.0,3.0,10.0,100.0])))
-print("Kernel resolutions: ", kernel.optimalResolutions)
+kernel0 = NephKernel([1.0,2.0,3.0], noiseVariance = 0.01)
+path = 'output/kernel0.nker'
+kernel0.save(path, force=True)
+kernel1 = NephKernel.load(path)
 
 # N = 512
 # span = [-10, 10]

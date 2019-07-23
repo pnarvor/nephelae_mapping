@@ -1,6 +1,8 @@
+import os
 import numpy as np
 import numpy.fft as npfft
-import sklearn.gaussian_process.kernels as Kernel
+import pickle
+import sklearn.gaussian_process.kernels as gpk
 
 class GprKernel:
 
@@ -17,10 +19,20 @@ class GprKernel:
         if resolutions is None:
             self.optimalResolutions = self.compute_optimal_resolutions()
         else:
-            if len(resolutions) != len(self.kernel.get_params()['length_scale']):
+            if len(resolutions) != len(self.kernel_length_scales()):
                 raise ValueError("resolutions paramater must the same dimension as the kernel")
             self.optimalResolutions = resolutions
-   
+ 
+
+    def __call__(self, X, Y=None, eval_gradient=False):
+        return self.kernel(X, Y, eval_gradient)
+
+
+    def kernel_length_scales(self):
+        keyLengthScale = [key for key in self.kernel.get_params()
+                          if 'length_scale' in key and not 'bounds' in key]
+        return self.kernel.get_params()[keyLengthScale[0]]
+
 
     def values(self, locations):
         origin = np.zeros(len(locations[0]))
@@ -38,7 +50,7 @@ class GprKernel:
         N = 32 * lengthScaleFactor
         resolutions = []
 
-        lengthScales = self.kernel.get_params()['length_scale']
+        lengthScales = self.kernel_length_scales()
         if isinstance(lengthScales, float):
             lengthScales = [lengthScales]
 
@@ -67,6 +79,44 @@ class GprKernel:
             resolutions.append(1.0 / (2.0 * (np.argmax(ft < -20) / N) * samplingRate))
         return resolutions
 
+
+class NephKernel(GprKernel):
+
+    """NephKernel
+
+    Specialization of GprKernel for Nephelae project use.
+    (for convenience, no heavy code here)
+    """
+
+    def load(path):
+        return pickle.load(open(path, "rb"))
+
+
+    def save(kernel, path, force=False):
+        if not force and os.path.exists(path):
+            raise ValueError("Path \"" + path + "\" already exists. "
+                             "Please delete the file, pick another path "
+                             "or force overwritting with force=True")
+        pickle.dump(kernel, open(path, "wb"))
+
+
+    def __init__(self, lengthScales, noiseVariance):
+        self.lengthScales  = lengthScales
+        self.noiseVariance = noiseVariance
+        super().__init__(gpk.RBF(lengthScales) + gpk.WhiteKernel(noiseVariance),
+                         lengthScales)
+
+
+    def __getstate__(self):
+        serializedItems = {}
+        serializedItems['lengthScales']  = self.lengthScales
+        serializedItems['noiseVariance'] = self.noiseVariance
+        return serializedItems
+
+
+    def __setstate__(self, data):
+        self.__init__(data['lengthScales'],
+                      data['noiseVariance'])
 
 
 
