@@ -6,89 +6,54 @@ import numpy as np
 import math as m
 import matplotlib.pyplot as plt
 from matplotlib import animation
+import pickle
 import matplotlib
-# matplotlib.use("Agg")
-# plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
-
 from netCDF4 import MFDataset
-
 from nephelae_simulation.mesonh_interface import ScaledArray
 from nephelae_simulation.mesonh_interface import DimensionHelper
 from nephelae_simulation.mesonh_interface import MesoNHVariable
+from nephelae_mapping.test.util import save_pickle
 
-var0 = 'RCT'
-# var1 = 'UT'     # WE wind
-# var1 = 'VT'     # SN wind
-var1 = 'WT'  # vertical wind
+def get_coordinate_extent(atm):
 
-atm = MFDataset('/net/skyscanner/volume1/data/Nephelae/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc')
+    tvar = atm.variables['time'][:]
+    tvar = tvar - tvar[0]
+    xvar = 1000.0 * atm.variables['W_E_direction'][:]
+    yvar = 1000.0 * atm.variables['S_N_direction'][:]
+    zvar = 1000.0 * np.squeeze(atm.variables['VLEV'][:, 0, 0])
+    return tvar, zvar, xvar, yvar
 
-tvar = atm.variables['time'][:]
-tvar = tvar - tvar[0]
-xvar = 1000.0 * atm.variables['W_E_direction'][:]
-yvar = 1000.0 * atm.variables['S_N_direction'][:]
-zvar = 1000.0 * np.squeeze(atm.variables['VLEV'][:, 0, 0])
+def show_map(data, xy_extent, data_unit, data_extent, time_stamp):
 
-# data0 = MesoNHVariable(atm, var0, interpolation='nearest')
-# data1 = MesoNHVariable(atm, var1, interpolation='nearest')
-data0 = MesoNHVariable(atm, var0, interpolation='linear')
-#data1 = MesoNHVariable(atm, var1, interpolation='linear')
+    fig = plt.figure(figsize=(12,4))
+    plt.title("Drone following cloud characterized by LWC at t= %ds"%(time_stamp))
+    plt.xlabel("x coordinate")
+    plt.ylabel("y coordinate")
+    pred_var = plt.imshow(data.T, origin='lower', extent=xy_extent, cmap=plt.cm.viridis)
 
-
-z0 = 1075.0
-y0 = 4500.0
-xySlice = slice(xvar[0]+0.5, xvar[-1]-0.5, None)
-#zSlice = slice(0.0, 12000.0, None)
-tStart = 70 # initial timestamp
-
-xyBounds = data0[0.0, z0, xySlice, xySlice].bounds
-xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
-# xzBounds = data0[0.0, zSlice, xySlice, y0].bounds
-# xzExtent = [xzBounds[1][0], xzBounds[1][1], xzBounds[0][0], xzBounds[0][1]]
-
-print('Started !')
-
-fig = plt.figure()
-varDisp0 = plt.imshow(data0[tStart, z0, xySlice, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xyExtent)
-# fig, axes = plt.subplots(2, 2, sharex=True)
-# varDisp0 = axes[0][0].imshow(data0[0.0, z0, xySlice, xySlice].data, cmap=plt.cm.viridis, origin='lower',
-#                              extent=xyExtent)
-#varDisp0 = plt.imshow(data0[0.0, z0, xySlice, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xyExtent)
-# varDisp1 = axes[1][0].imshow(data0[0.0, zSlice, y0, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xzExtent)
-# varDisp2 = axes[0][1].imshow(data1[0.0, z0, xySlice, xySlice].data, cmap=plt.cm.viridis, origin='lower',
-#                              extent=xyExtent)
-# varDisp3 = axes[1][1].imshow(data1[0.0, zSlice, y0, xySlice].data, cmap=plt.cm.viridis, origin='lower', extent=xzExtent)
-
-xi = 400
-yi = 2100
-s_w = 8 # wind speed
-theta = 0 # angle(speed vector, x axis)
-radius = 100
-v_circle = 400 # speed in circle
-end_reach = False
-
-# for lemniscate trajectories
-rot_active = False
-angles = [90, 45, 135]
-colors = ["red", "green", "blue", "yellow", "black"]
-color = "white"
-rot_angle = 0
-sub_factor = 0
-xf = 0
-yf = 0
+    cbar = plt.colorbar(fraction=0.0471, pad=0.01)
+    cbar.ax.set_title(data_unit, pad=14)
+    cbar.formatter.set_powerlimits((0, 0))
+    cbar.update_ticks()
+    plt.clim(data_extent[0], data_extent[1])
+    plt.tight_layout()
+    return fig, pred_var
 
 def line_trajectory(xi, yi, t, theta=0, s=20):
+
     x_new = xi + s * np.cos(np.radians(theta)) * t
     y_new = yi + s * np.sin(np.radians(theta)) * t
     return x_new, y_new
 
 def circ_trajectory(xc, yc, t, r, v=1000):
+
     w = v/r
     x_new = xc + r * np.cos(np.radians(w * t))
     y_new = yc + r * np.sin(np.radians(w * t))
     return x_new, y_new
 
 def lemniscate_trajectory(xc, yc, t, r, v=1000):
+
     alpha = r
     w = v / r
     x_new = xc + alpha * np.sqrt(2) * np.cos(np.radians(90+ (w * t))) / (np.sin(np.radians(90+ (w * t))) ** 2 + 1)
@@ -106,69 +71,131 @@ def rotate(origin, point, angle):
     qy = oy + m.sin(angle) * (px - ox) + m.cos(angle) * (py - oy)
     return qx, qy
 
-def init():
-    # axes[0][0].scatter(xi, yi, c="white", marker="x", s=20)
-    plt.plot([xySlice.start, xySlice.stop], [y0, y0], color=[0.0, 0.0, 0.0, 1.0])
-    #plt.scatter(xi, yi, c="white", marker="x", s=15)
-    # axes[0][0].plot([xySlice.start, xySlice.stop], [y0, y0], color=[0.0, 0.0, 0.0, 1.0])
-    # axes[1][0].plot([zSlice.start, zSlice.stop], [z0, z0], color=[0.0, 0.0, 0.0, 1.0])
-    # axes[0][1].plot([xySlice.start, xySlice.stop], [y0, y0], color=[0.0, 0.0, 0.0, 1.0])
-    # axes[1][1].plot([zSlice.start, zSlice.stop], [z0, z0], color=[0.0, 0.0, 0.0, 1.0])
 
+if __name__ == "__main__":
 
-def update(i):
+    gt_save = True
+    anim_save = True
+    if(anim_save):
+        matplotlib.use("Agg")
+        plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
 
-    t = tStart + i
+    atm = MFDataset("/net/skyscanner/volume1/data/Nephelae/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc")
+    tvar, zvar, xvar, yvar = get_coordinate_extent(atm)
 
-    varDisp0.set_data(data0[t, z0, xySlice, xySlice].data)
-    # varDisp1.set_data(data0[t, zSlice, y0, xySlice].data)
-    # varDisp2.set_data(data1[t, z0, xySlice, xySlice].data)
-    # varDisp3.set_data(data1[t, zSlice, y0, xySlice].data)
+    var_interest = 'RCT' # or 'WT' etc
+    data = MesoNHVariable(atm, var_interest, interpolation='linear')
+    lwc_unit = "kg a/kg w"
+    lwc_extent = [0, 4.5e-4]
 
-    global end_reach, rot_active, sub_factor, angles, rot_angle, xf, yf, colors, color
+    tStart = 180  # initial timestamp
+    time_length = 215 # length of time span
+    z = 1075.0    # fixed height in m
+    xSlice = slice(1500, 3800, None)
+    ySlice = slice(4100, 4800, None)
 
-    if (end_reach == False):
+    xyBounds = data[0.0, z, xSlice, ySlice].bounds
+    xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
 
-        xn, yn = lemniscate_trajectory(xi, yi, i - sub_factor, radius, v_circle)
-        xc, yc = xn, yn
-        print(t, sub_factor, i-sub_factor, xf, yf, xc, yc)
-        if (xc==xf and yc==yf):
-            rot_active = True
-            sub_factor = i - 1
-            print(angles, colors)
-            if (angles):
-                rot_angle = angles.pop(0)
-                color =colors.pop(0)
+    fig, lwc_data = show_map(np.zeros(data[0.0, z, xSlice, ySlice].data.shape), xyExtent, lwc_unit, lwc_extent, 0)
+
+    traj_type = "lemniscate" # or circular
+    # Trajectory params
+    xi = 1700           # intial drone position
+    yi = 4400           # intial drone position
+    s_w = 8             # wind speed
+    theta = 0           # angle(speed vector, x axis)
+    radius = 80         # r of circle or focus of lemniscate
+    v_circle = 400      # speed in curve
+    end_reach = False
+
+    # For lemniscate trajectories
+    rot_active = False
+    angles = [90, 45, 135]
+    colors = ["red", "green", "blue", "yellow", "black"]
+    color = "white"
+    rot_angle = 0
+    sub_factor = 0
+    xf = 0
+    yf = 0
+
+    XT = np.empty((0, 3), float)
+    yT = []
+
+    def init():
+        #do nothing
+        pass
+
+    def update(i):
+
+        t = tStart + i
+
+        lwc_data.set_data(data[t, z, ySlice, xSlice].data)
+        plt.title("Drone following cloud characterized by LWC at t= %ds" % (t))
+
+        global end_reach, rot_active, sub_factor, angles, rot_angle, xf, yf, colors, color, XT, yT
+
+        if (end_reach == False and i < time_length-1):
+
+            if(traj_type == "lemniscate"):
+                xn, yn = lemniscate_trajectory(xi, yi, i - sub_factor, radius, v_circle)
+                if (xn == xf and yn == yf):
+                    rot_active = True
+                    sub_factor = i - 1
+                    if (angles):
+                        rot_angle = angles.pop(0)
+                        color = colors.pop(0)
+                    else:
+                        rot_active = False
+                        angles = [90, 45, 135]
+                        rot_angle = 0
+                        color = "white"
+                        colors = ["red", "green", "blue", "yellow", "black"]
+                if (i == 1):
+                    xf, yf = xn, yn
+                if (rot_active):
+                    xn, yn = rotate((xi, yi), (xn, yn), m.radians(rot_angle))
+
+            elif(traj_type == "circular"):
+                xn, yn = circ_trajectory(xi, yi, i , radius, v_circle)
+
             else:
-                rot_active = False
-                angles = [90, 45, 135]
-                rot_angle = 0
-                color = "white"
-                colors = ["red", "green", "blue", "yellow", "black"]
+                print("Wrong trajectory type! Exiting...")
+                exit()
 
-        if (rot_active):
-            xn, yn = rotate((xi, yi), (xn, yn), m.radians(rot_angle))
-        if(i==1):
-            xf, yf = xc, yc
-        #print(xi, yi, i - sub_factor, xc, yc, rot_active)
-        # Circular + wind
-        #xn, yn = circ_trajectory(xi, yi, i , radius, v_circle)
-        xn, yn = line_trajectory(xn, yn, i , theta, s_w) # adding wind speed
+            xn, yn = line_trajectory(xn, yn, i, theta, s_w)  # adding wind speed
 
-        if (xn >= xyExtent[1] - 200 or yn >= xyExtent[3] - 200):
-            end_reach = True
-        else:
-           plt.scatter(xn, yn, c=color, marker="x", s=15)
+            if (xn >= xyExtent[1] - 200 or yn >= xyExtent[3] - 200):
+                end_reach = True
+            else:
+                XT = np.vstack([XT, [xn, yn, t]])
+                yT = np.append(yT, data[t, z, yn, xn])
+                plt.scatter(xn, yn, c=color, marker="x", s=15)
 
-anim = animation.FuncAnimation(
-    fig,
-    update,
-    init_func=init,
-    frames= range(1,len(xvar) * len(yvar)),
-    interval=1)
+        if (i == time_length-1 and gt_save):
 
-# Writer = animation.writers['ffmpeg']
-# writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-# anim.save('circle_flight.mp4', writer=writer)
+            # Save 2D area info
+            xExtent = xvar[(xvar >= xyExtent[0]) & (xvar <= xyExtent[1])]
+            yExtent = yvar[(yvar >= xyExtent[2]) & (yvar <= xyExtent[3])]
+            save_pickle(xExtent, "xExtent")
+            save_pickle(yExtent, "yExtent")
 
-plt.show(block=False)
+            # Save Trajectory and data info
+            save_pickle(XT, "coord")
+            save_pickle(yT.reshape(-1, 1), "lwc_data")
+
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        frames=range(1, time_length),
+        init_func=init,
+        repeat=False,
+        interval=1,
+    )
+
+    if (anim_save):
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
+        anim.save('gt_flight.mp4', writer=writer)
+    else:
+        plt.show(block=False)
