@@ -14,7 +14,7 @@ class GprPredictor:
 
     """
 
-    def __init__(self, trainLocations, trainValues, kernel, noiseStd):
+    def __init__(self, trainLocations, trainValues, kernel):
 
         """
         obsLocations : TxN np.array, T observations locations in a N-D space.
@@ -24,10 +24,11 @@ class GprPredictor:
         """
         self.trainLocations = trainLocations
         self.trainValues    = trainValues
+        self.kernel         = kernel
         self.bounds = [Bounds(m,M) for m,M in zip(trainLocations.min(axis=0),
                                                   trainLocations.max(axis=0))]
-        self.gprProcessor = GaussianProcessRegressor(kernel=kernel,
-                                                     alpha=noiseStd**2,
+        self.gprProcessor = GaussianProcessRegressor(kernel=self.kernel.kernel,
+                                                     alpha=0.0,
                                                      optimizer=None,
                                                      copy_X_train=False)
         self.gprProcessor.fit(trainLocations, trainValues.reshape(-1,1))
