@@ -76,6 +76,7 @@ if __name__ == "__main__":
 
     gt_save = True
     anim_save = True
+    save_path = "exp/3/"
     if(anim_save):
         matplotlib.use("Agg")
         plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
@@ -86,13 +87,13 @@ if __name__ == "__main__":
     var_interest = 'RCT' # or 'WT' etc
     data = MesoNHVariable(atm, var_interest, interpolation='linear')
     lwc_unit = "kg a/kg w"
-    lwc_extent = [0, 4.5e-4]
 
     tStart = 180  # initial timestamp
     time_length = 215 # length of time span
     z = 1075.0    # fixed height in m
     xSlice = slice(1500, 3800, None)
     ySlice = slice(4100, 4800, None)
+    lwc_extent = [data[:,z,xSlice,ySlice].data.min(), data[:,z,xSlice,ySlice].data.max() + 0.4 * data[:,z,xSlice,ySlice].data.max()]
 
     xyBounds = data[0.0, z, xSlice, ySlice].bounds
     xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
@@ -174,15 +175,16 @@ if __name__ == "__main__":
 
         if (i == time_length-1 and gt_save):
 
-            # Save 2D area info
+            # Save 2D area info + var_interest limits
             xExtent = xvar[(xvar >= xyExtent[0]) & (xvar <= xyExtent[1])]
             yExtent = yvar[(yvar >= xyExtent[2]) & (yvar <= xyExtent[3])]
-            save_pickle(xExtent, "xExtent")
-            save_pickle(yExtent, "yExtent")
+            save_pickle(xExtent, save_path+"xExtent")
+            save_pickle(yExtent, save_path+"yExtent")
+            save_pickle(lwc_extent, save_path+"lwc_extent")
 
             # Save Trajectory and data info
-            save_pickle(XT, "coord")
-            save_pickle(yT.reshape(-1, 1), "lwc_data")
+            save_pickle(XT, save_path+"coord")
+            save_pickle(yT.reshape(-1, 1), save_path+"lwc_data")
 
     anim = animation.FuncAnimation(
         fig,
@@ -196,6 +198,6 @@ if __name__ == "__main__":
     if (anim_save):
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
-        anim.save('gt_flight.mp4', writer=writer)
+        anim.save(save_path+'gt_flight.mp4', writer=writer)
     else:
         plt.show(block=False)
