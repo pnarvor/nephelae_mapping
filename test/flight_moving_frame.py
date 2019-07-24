@@ -23,13 +23,13 @@ def get_coordinate_extent(atm):
     zvar = 1000.0 * np.squeeze(atm.variables['VLEV'][:, 0, 0])
     return tvar, zvar, xvar, yvar
 
-def show_map(data, xy_extent, data_unit, data_extent, time_stamp):
+def show_map(data, xy_extent, data_unit, data_extent, time_stamp, height, figsize=(8, 6)):
 
-    fig = plt.figure(figsize=(12,4))
-    plt.title("Drone following cloud characterized by LWC at t= %ds"%(time_stamp))
+    fig = plt.figure(figsize=figsize)
+    plt.title("Cloud at t= %ds & z= %dm"%(time_stamp, height))
     plt.xlabel("x coordinate")
     plt.ylabel("y coordinate")
-    pred_var = plt.imshow(data.T, origin='lower', extent=xy_extent, cmap=plt.cm.viridis)
+    plot = plt.imshow(data.T, origin='lower', extent=xy_extent, cmap=plt.cm.viridis)
 
     cbar = plt.colorbar(fraction=0.0471, pad=0.01)
     cbar.ax.set_title(data_unit, pad=14)
@@ -37,7 +37,7 @@ def show_map(data, xy_extent, data_unit, data_extent, time_stamp):
     cbar.update_ticks()
     plt.clim(data_extent[0], data_extent[1])
     plt.tight_layout()
-    return fig, pred_var
+    return fig, plot
 
 def line_trajectory(xi, yi, t, theta=0, s=20):
 
@@ -74,8 +74,8 @@ def rotate(origin, point, angle):
 
 if __name__ == "__main__":
 
-    gt_save = True
-    anim_save = True
+    gt_save = False
+    anim_save = False
     save_path = "exp/3/"
     if(anim_save):
         matplotlib.use("Agg")
@@ -93,12 +93,12 @@ if __name__ == "__main__":
     z = 1075.0    # fixed height in m
     xSlice = slice(1500, 3800, None)
     ySlice = slice(4100, 4800, None)
-    lwc_extent = [data[:,z,xSlice,ySlice].data.min(), data[:,z,xSlice,ySlice].data.max() + 0.4 * data[:,z,xSlice,ySlice].data.max()]
+    lwc_extent = [data[:,z,xSlice,ySlice].data.min(), data[:,z,xSlice,ySlice].data.max() + 0.25 * data[:,z,xSlice,ySlice].data.max()]
 
     xyBounds = data[0.0, z, xSlice, ySlice].bounds
     xyExtent = [xyBounds[0][0], xyBounds[0][1], xyBounds[1][0], xyBounds[1][1]]
 
-    fig, lwc_data = show_map(np.zeros(data[0.0, z, xSlice, ySlice].data.shape), xyExtent, lwc_unit, lwc_extent, 0)
+    fig, lwc_data = show_map(np.zeros(data[0.0, z, ySlice, xSlice].data.shape), xyExtent, lwc_unit, lwc_extent, 0, z, (12,4))
 
     traj_type = "lemniscate" # or circular
     # Trajectory params

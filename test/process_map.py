@@ -14,7 +14,7 @@ def com(coord, data):
     ndim = coord.shape[1]
     return [np.sum(data * coord[:,i])/ mass_sum for i in range(ndim)]
 
-def border_cs(data, cs_shape, cloud_extent, fig=True, threshold=1e-5, c="Black"):
+def border_cs(data, cs_shape, cloud_extent, threshold=1e-5, c="Black"):
     # Calculates Border of Cross Section from dense map
     # Inputs:
     #   data - numpy list of data of interest: shape (n,1) 1 column matrix
@@ -26,9 +26,8 @@ def border_cs(data, cs_shape, cloud_extent, fig=True, threshold=1e-5, c="Black")
 
     data[data < threshold] = 0  # Thresholding
     data_grid = np.reshape(data, cs_shape).T  # reshaping as a cs grid
-    if(fig):
-        plt.contour(data_grid, origin='lower', extent=cloud_extent, colors=c, levels=0)
-    return data_grid
+    border_plot = plt.contour(data_grid, origin='lower', extent=cloud_extent, colors=c, levels=0)
+    return data_grid, border_plot
 
 def data_plus_uncertainity(data, std_data, std_factor=1):
     # Data +/- sigma (or 2 sigma, 3 sigma,..)
