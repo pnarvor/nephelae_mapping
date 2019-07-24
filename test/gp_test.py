@@ -11,7 +11,7 @@ import matplotlib
 from nephelae_mapping.test.util import load_pickle
 
 
-def plot_sampled_points(coord, interest_var, x_extent, y_extent, data_extent, data_unit, save_fig = False):
+def plot_sampled_points(coord, interest_var, x_extent, y_extent, data_extent, data_unit, save_fig = False, save_path=""):
 
     plt.figure(figsize = (12,4))
     plt.title("Acquired GT Data : %d points with 1 point/sec rate, t=(%ds, %ds)"%(interest_var.shape[0], coord[0,2], coord[-1,2]))
@@ -26,7 +26,7 @@ def plot_sampled_points(coord, interest_var, x_extent, y_extent, data_extent, da
     cbar.update_ticks()
     plt.tight_layout()
     if(save_fig):
-        plt.savefig("GT_points")
+        plt.savefig(save_path + "GT_points")
 
 def noisy_samples(interest_var, noise_std, zero_threshold):
 
@@ -88,23 +88,23 @@ def show_map(pred_grid, xy_extent, data_unit, data_extent, time_stamp):
 
 if __name__ == "__main__":
 
-    coord = load_pickle("coord")
-    lwc_data = load_pickle("lwc_data")
-
-    #coord, lwc_data = load_samples("coord.pickle", "lwc_data.pickle")
-
-    lwc_extent = [0, 4.5e-4] # range of lwc
+    data_path = "exp/3/"
+    save_path = "exp/3/"
+    anim_save = True
+    save_sample_points = True
     lwc_unit = "kg a/kg w"
     noise_std = 1e-6
     zero_thresholding = True
 
-    x_extent = load_pickle("xExtent")
-    y_extent = load_pickle("yExtent")
-    #x_extent, y_extent = load_window_size("/net/skyscanner/volume1/data/Nephelae/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc", [60,150], [164,186])
+    coord = load_pickle( data_path + "coord")
+    lwc_data = load_pickle( data_path + "lwc_data")
+    lwc_extent = load_pickle( data_path + "lwc_extent")
+
+    x_extent = load_pickle( data_path + "xExtent")
+    y_extent = load_pickle( data_path + "yExtent")
 
     # Plot GT points
-    save_sample_points = True
-    plot_sampled_points(coord, lwc_data, x_extent, y_extent, lwc_extent, lwc_unit, save_fig = save_sample_points)
+    plot_sampled_points(coord, lwc_data, x_extent, y_extent, lwc_extent, lwc_unit, save_sample_points, save_path)
 
     # Add noise to data
     lwc_data =  noisy_samples(lwc_data, noise_std, zero_thresholding)
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     # show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
 
     ##======2. Fit GPR each second and predict map/s ========
-    anim_save = False
+
     if(anim_save):
         matplotlib.use("Agg")
         plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     if(anim_save):
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
-        anim.save('predict_3d.mp4', writer=writer)
+        anim.save(save_path + 'predict_3d.mp4', writer=writer)
     else:
         plt.show(block=False)
     print("done")
