@@ -84,6 +84,8 @@ if __name__ == "__main__":
     data_shape = data[t, zStart, ySlice, xSlice].data.shape
     fig, lwc_data = show_map(np.zeros(data_shape), xyExtent, lwc_unit, lwc_extent, 0, 0)
     _, border_data = border_cs(np.zeros((data_shape[0]*data_shape[1],1)), data_shape, xyExtent, threshold=3e-5, c="Black")
+    ellip_curve, = plt.plot(0, 0)
+    ellip_center = plt.scatter(0, 0, c="Red")
 
     def init():
         #do nothing
@@ -92,21 +94,26 @@ if __name__ == "__main__":
     def update(i):
 
         z = zStart + i
-        global  border_data, lwc_z_mean
+        plt.title("Cloud at t= %ds & z= %dm" % (t, z))
         lwc_data_z = data[t, z, ySlice, xSlice].data
         lwc_data.set_data(lwc_data_z)
+
+        global border_data
+
+        # Remove old border plot
         for coll in border_data.collections:
             plt.gca().collections.remove(coll)
-        _, border_data = border_cs(lwc_data_z, data_shape, xyExtent, threshold=3e-5, c="Black")
-        plt.title("Cloud at t= %ds & z= %dm" % (t, z))
 
+        # Get new border plot and data
+        _, border_data = border_cs(lwc_data_z, data_shape, xyExtent, threshold=3e-5, c="Black")
+
+        # Get border curve coords
         curve_coords = border_data._get_allsegs_and_allkinds()[0][0][0]
+
+        # Fit Ellipse on curve coords
         ell_params, ellipse = fitEllipse(curve_coords, 1)
-        print("Curve",curve_coords)
-        print("Ellipse",ellipse)
-        print("")
-        plt.plot(ellipse[:, 0], ellipse[:, 1])
-        plt.scatter(ell_params[0], ell_params[1])
+        ellip_curve.set_data(ellipse[:, 0], ellipse[:, 1])
+        ellip_center.set_offsets(np.c_[ell_params[0], ell_params[1]])
 
     anim = animation.FuncAnimation(
         fig,
