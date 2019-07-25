@@ -25,8 +25,10 @@ def border_cs(data, cs_shape, cloud_extent, threshold=1e-5, c="Black"):
     # Outputs: border grid plus optional plot
 
     data[data < threshold] = 0  # Thresholding
-    data_grid = np.reshape(data, cs_shape).T  # reshaping as a cs grid
+    data_grid = np.reshape(data, cs_shape)  # reshaping as a cs grid
     border_plot = plt.contour(data_grid, origin='lower', extent=cloud_extent, colors=c, levels=0)
+    plt.xlim(cloud_extent[0], cloud_extent[1])
+    plt.ylim(cloud_extent[2], cloud_extent[3])
     return data_grid, border_plot
 
 def data_plus_uncertainity(data, std_data, std_factor=1):
