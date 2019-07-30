@@ -12,8 +12,8 @@ from netCDF4 import MFDataset
 from nephelae_simulation.mesonh_interface import ScaledArray
 from nephelae_simulation.mesonh_interface import DimensionHelper
 from nephelae_simulation.mesonh_interface import MesoNHVariable
-from nephelae_mapping.test.util import save_pickle
-from nephelae_mapping.test.process_map import border_cs
+from nephelae_mapping.test.util import save_pickle, load_pickle
+from nephelae_mapping.test.process_map import border_cs, com
 from nephelae_mapping.test.flight_moving_frame import get_coordinate_extent, show_map
 from matplotlib.patches import Ellipse
 
@@ -32,6 +32,12 @@ def estimate_LR_coef(x, y):
     a = SS_xy / SS_xx
     b = m_y - a*m_x
     return(a, b)
+
+def get_ellipse_coords(params):
+    # params: [cx, cy, a, b, angle]
+    ell = Ellipse((params[0], params[1]), params[2] * 2., params[3] * 2., params[4])
+    ell_coord = ell.get_verts()
+    return ell_coord
 
 def fitEllipse(cont,method):
 
@@ -65,10 +71,9 @@ def fitEllipse(cont,method):
     a=np.sqrt(abs(up/down1))
     b=np.sqrt(abs(up/down2))
     #---------------------Get path---------------------
-    ell=Ellipse((cx,cy),a*2.,b*2.,angle)
-    ell_coord=ell.get_verts()
-    params=[cx,cy,a,b,angle,E.max()]
-    return params,ell_coord
+    params = [cx, cy, a, b, angle]
+    ell_coord =  get_ellipse_coords(params)
+    return params, ell_coord, E.max()
 
 def get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent):
 
@@ -76,16 +81,22 @@ def get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent
     ellipses_widths = []
     ellipses_heights = []
     ellipses_area = []
+
+    #==Get cloud base params
+    initial_param = []
+
     for i in range(z_depth):
         z = zStart + i
         lwc_data_z = data[t, z, ySlice, xSlice].data
         _, border_data = border_cs(lwc_data_z, data_shape, xyExtent, threshold=3e-5, c="Black")
         curve_coords = border_data._get_allsegs_and_allkinds()[0][0][0]
-        ell_params, ellipse = fitEllipse(curve_coords, 1)
+        ell_params, ellipse, _ = fitEllipse(curve_coords, 1)
         ellipses_widths.append(ell_params[2])
         ellipses_heights.append(ell_params[3])
         ellipses_area.append(np.pi*ell_params[2]*ell_params[3])
-    return ellipses_widths, ellipses_heights, ellipses_area
+        if(i==0):
+            initial_param = ell_params
+    return ellipses_widths, ellipses_heights, ellipses_area, initial_param
 
 def sa_with_z(z, m , c):
 
@@ -93,12 +104,38 @@ def sa_with_z(z, m , c):
     y = m * z + c
     return y
 
+def avg_in_circum(ellipse_coords, data):
+
+    # Get avg value of data in ellipse circumference
+    sum_data = 0
+    for x, y in ellipse_coords:
+        sum_data = sum_data + data[t, zStart, y, x]
+
+    avg_value = sum_data / ellipse_coords.shape[0]
+    return avg_value
+
+def get_field_prior(base_ellipse_params, data, t, zStart):
+
+    print("Field Prior Computaion Started")
+    cx, cy, a, b, angle = base_ellipse_params
+    a_by_b = a / b  # Get ratio a:b
+    avg_var_per = {}
+    var_val_at_center = data[t, zStart, cy, cx]
+    for i in range(1, int(b) + 1):
+        ell_coords = get_ellipse_coords([cx, cy, a_by_b * i, i, angle])
+        avg_var_per[round(i / int(b), 2)] = round(avg_in_circum(ell_coords, data) / var_val_at_center , 2)
+    print("Done")
+    return avg_var_per
+
 if __name__ == "__main__":
 
     save_path = "exp/4/"
-    do_animation = True
+    data_path = "exp/4/"
+    do_animation = False
     anim_save = False
-    prior_save = True
+    prior_save = False
+    save_plots = True
+    compute_field_prior = False
 
     if(anim_save):
         matplotlib.use("Agg")
@@ -123,7 +160,7 @@ if __name__ == "__main__":
     data_shape = data[t, zStart, ySlice, xSlice].data.shape
 
     # Fit ellipses at cross-sections of cloud at each z and get their parameters
-    ell_a, ell_b, ell_area = get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent)
+    ell_a, ell_b, ell_area, base_ellipse_params = get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent)
     ell_area_per = ell_area / ell_area[0] * 100 # Get area in % as a function of base area
 
     # Plot evolution of area of fitted ellipse as function of height
@@ -136,6 +173,7 @@ if __name__ == "__main__":
     # Fit a line via Linear Regression and get coefficients (Shape or surface area Prior)
     m, c = estimate_LR_coef(np.arange(1,z_depth), ell_area_per[1:])
     if(prior_save):
+        # Save Surface area Prior Function Params
         save_pickle([m,c], save_path + "SA_prior_params")
 
     # Plot Fitted line on top of curve
@@ -145,6 +183,26 @@ if __name__ == "__main__":
         lwc_fit.append(y)
     plt.plot(range(1, z_depth), lwc_fit)
 
+    if(save_plots):
+        plt.savefig(save_path + "SA_with_Z.png")
+
+    ##=========== Obtain Field Prior==============================
+    if(compute_field_prior):
+        field_prior = get_field_prior(base_ellipse_params, data, t, zStart)
+        if(prior_save):
+            # Save Field Prior
+            save_pickle(field_prior, save_path + "lwc_field_prior")
+    else:
+        field_prior = load_pickle(data_path + "lwc_field_prior")
+
+    plt.figure()
+    plt.plot(list(field_prior.keys()), list(field_prior.values()))
+    plt.title("Evolution of LWC Field in cloud base cross section")
+    plt.xlabel("Fraction of each ellipse radii as function of biggest ellipse radius")
+    plt.ylabel("Fraction of avg. lwc value compared to ellipse center lwc")
+    if (save_plots):
+        plt.savefig(save_path + "lwc_field_prior.png")
+
     if(do_animation):
 
         # Show animation of fitted ellipse!
@@ -152,6 +210,7 @@ if __name__ == "__main__":
         _, border_data = border_cs(np.zeros((data_shape[0]*data_shape[1],1)), data_shape, xyExtent, threshold=3e-5, c="Black")
         ellip_curve, = plt.plot(0, 0)
         ellip_center = plt.scatter(0, 0, c="Red")
+        ellip_com = plt.scatter(0, 0, c="White")
 
         def init():
             #do nothing
@@ -177,10 +236,11 @@ if __name__ == "__main__":
             curve_coords = border_data._get_allsegs_and_allkinds()[0][0][0] # only valid when only 1 curve inside a surface
 
             # Fit Ellipse on curve coords
-            ell_params, ellipse = fitEllipse(curve_coords, 1)
+            ell_params, ellipse, fit_score = fitEllipse(curve_coords, 1)
             ellip_curve.set_data(ellipse[:, 0], ellipse[:, 1])
             ellip_center.set_offsets(np.c_[ell_params[0], ell_params[1]])
-            plt.title("Cloud at t= %ds & z= %dm fit: %.2e" % (t, z, ell_params[5]))
+            #ellip_com.set_offsets(np.c_[com()])
+            plt.title("Cloud at t= %ds & z= %dm fit: %.2e" % (t, z, fit_score))
 
         anim = animation.FuncAnimation(
             fig,
@@ -199,3 +259,7 @@ if __name__ == "__main__":
         else:
             plt.show(block=False)
 
+
+####
+# num = 0.024
+# cdata.get(num, cdata[min(cdata.keys(), key=lambda k: abs(k-num))])
