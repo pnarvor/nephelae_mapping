@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def com(coord, data):
+
     # Calculates Center of Mass!
     # Inputs:
     #   data - numpy list of data of interest : shape (n,), 1d array
@@ -15,6 +16,7 @@ def com(coord, data):
     return [np.sum(data * coord[:,i])/ mass_sum for i in range(ndim)]
 
 def border_cs(data, cs_shape, cloud_extent, threshold=1e-5, c="Black"):
+
     # Calculates Border of Cross Section from dense map
     # Inputs:
     #   data - numpy list of data of interest: shape (n,1) 1 column matrix
@@ -32,6 +34,7 @@ def border_cs(data, cs_shape, cloud_extent, threshold=1e-5, c="Black"):
     return data_grid, border_plot
 
 def data_plus_uncertainity(data, std_data, std_factor=1):
+
     # Data +/- sigma (or 2 sigma, 3 sigma,..)
     # Inputs:
     #   data - numpy list of data of interest : shape (n,1) 1 column matrix
@@ -42,6 +45,7 @@ def data_plus_uncertainity(data, std_data, std_factor=1):
     return data - std_factor * std_data, data + std_factor * std_data
 
 def confidence_border_cs(data, std_data, cs_shape, cloud_extent, std_factor=1, fig=True, threshold=1e-5, color="darkgray"):
+
     # Calculates Confidence Border of Cross Section from dense map
     # Inputs:
     #   As defined in data_plus_uncertainity & border_cs

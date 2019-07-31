@@ -292,8 +292,3 @@ if __name__ == "__main__":
             matplotlib.use("Qt5Agg")
         else:
             plt.show(block=False)
-
-
-####
-# num = 0.024
-# cdata.get(num, cdata[min(cdata.keys(), key=lambda k: abs(k-num))])

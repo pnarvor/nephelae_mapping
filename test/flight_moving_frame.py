@@ -23,9 +23,11 @@ def get_coordinate_extent(atm):
     zvar = 1000.0 * np.squeeze(atm.variables['VLEV'][:, 0, 0])
     return tvar, zvar, xvar, yvar
 
-def show_map(data, xy_extent, data_unit, data_extent, time_stamp, height, figsize=(8, 6)):
+def show_map(data, xy_extent, data_unit, data_extent, time_stamp, height, figsize=(8, 6), new_fig=True):
 
-    fig = plt.figure(figsize=figsize)
+    fig = ""
+    if(new_fig):
+        fig = plt.figure(figsize=figsize)
     plt.title("Cloud at t= %ds & z= %dm"%(time_stamp, height))
     plt.xlabel("x coordinate")
     plt.ylabel("y coordinate")
