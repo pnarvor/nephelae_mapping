@@ -77,7 +77,8 @@ def fitEllipse(cont,method):
 
 def get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent):
 
-    #==Gets width, height and area array of ellipses
+    #==Gets center, width, height and area array of ellipses
+    ellipses_center = []
     ellipses_widths = []
     ellipses_heights = []
     ellipses_area = []
@@ -91,12 +92,14 @@ def get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent
         _, border_data = border_cs(lwc_data_z, data_shape, xyExtent, threshold=3e-5, c="Black")
         curve_coords = border_data._get_allsegs_and_allkinds()[0][0][0]
         ell_params, ellipse, _ = fitEllipse(curve_coords, 1)
+        ellipses_center.append([ell_params[0],ell_params[1]])
         ellipses_widths.append(ell_params[2])
         ellipses_heights.append(ell_params[3])
         ellipses_area.append(np.pi*ell_params[2]*ell_params[3])
         if(i==0):
             initial_param = ell_params
-    return ellipses_widths, ellipses_heights, ellipses_area, initial_param
+
+    return ellipses_center, ellipses_widths, ellipses_heights, ellipses_area, initial_param
 
 def sa_with_z(z, m , c):
 
@@ -127,6 +130,19 @@ def get_field_prior(base_ellipse_params, data, t, zStart):
     print("Done")
     return avg_var_per
 
+
+def get_var_func_with_z(coords, data, t, zStart, depth):
+
+    # Gets variation of interest variable at center with height
+    # coords: 2D points , one at each z. eg: center coords of cloud at each z
+
+    var_at_base = data[t, zStart, coords[0][1], coords[0][0]]
+    var_per_z = {}
+    for i in range(1, depth):
+        var_per_z[i] = round(data[t, zStart + i, coords[i][1], coords[i][0]] / var_at_base, 2)
+
+    return var_per_z
+
 if __name__ == "__main__":
 
     save_path = "exp/4/"
@@ -134,8 +150,9 @@ if __name__ == "__main__":
     do_animation = False
     anim_save = False
     prior_save = False
-    save_plots = True
+    save_plots = False
     compute_field_prior = False
+    compute_var_z_prior = False
 
     if(anim_save):
         matplotlib.use("Agg")
@@ -160,7 +177,7 @@ if __name__ == "__main__":
     data_shape = data[t, zStart, ySlice, xSlice].data.shape
 
     # Fit ellipses at cross-sections of cloud at each z and get their parameters
-    ell_a, ell_b, ell_area, base_ellipse_params = get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent)
+    ell_c, ell_a, ell_b, ell_area, base_ellipse_params = get_ellipses_params(t, zStart, ySlice, xSlice, z_depth, data_shape, xyExtent)
     ell_area_per = ell_area / ell_area[0] * 100 # Get area in % as a function of base area
 
     # Plot evolution of area of fitted ellipse as function of height
@@ -202,6 +219,23 @@ if __name__ == "__main__":
     plt.ylabel("Fraction of avg. lwc value compared to ellipse center lwc")
     if (save_plots):
         plt.savefig(save_path + "lwc_field_prior.png")
+
+    ##===============Variable evolution with z prior========
+    if(compute_var_z_prior):
+        var_z_prior = get_var_func_with_z(ell_c, data, t, zStart, z_depth)
+        if(prior_save):
+            # Save Field Prior
+            save_pickle(var_z_prior, save_path + "var_z_prior")
+    else:
+        var_z_prior = load_pickle(data_path + "var_z_prior")
+
+    plt.figure()
+    plt.plot(list(var_z_prior.keys()), list(var_z_prior.values()))
+    plt.title("Evolution of LWC Field in cloud center with Z")
+    plt.xlabel("Height from cloud base (in m)")
+    plt.ylabel("Fraction of lwc value compared to cloud base center")
+    if (save_plots):
+        plt.savefig(save_path + "var_z_prior.png")
 
     if(do_animation):
 
