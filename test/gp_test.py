@@ -28,28 +28,8 @@ def plot_sampled_points(coord, interest_var, x_extent, y_extent, data_extent, da
     if(save_fig):
         plt.savefig(save_path + "GT_points")
 
-def noisy_samples(interest_var, noise_std, zero_threshold):
-
-    interest_var = interest_var + (noise_std ** 2 * np.random.randn(len(interest_var))).reshape(-1,1) #added noise
-    if(zero_threshold): # threshold negative values to 0
-        interest_var = interest_var.clip(min=0) #ignoring negative rct values
-    return interest_var
-
-def RBF_kernel(sigma_f, sigma_f_bounds, lengthscale, lengthscale_bounds):
-
-    return C(constant_value = sigma_f ** 2, constant_value_bounds = (sigma_f_bounds[0] ** 2, sigma_f_bounds[1] ** 2) ) * \
-            RBF(length_scale = lengthscale, length_scale_bounds = lengthscale_bounds )
-
-def fit_gpr(coord, interest_data, kernel, noise_std, n_restarts_optimizer):
-
-    # Define and Fit GPR
-    if(n_restarts_optimizer==0):
-        gpr = GaussianProcessRegressor(kernel=kernel, alpha=noise_std ** 2, n_restarts_optimizer=0, optimizer=None).fit(coord, interest_data)
-    else:
-        gpr = GaussianProcessRegressor(kernel=kernel, alpha=noise_std ** 2, n_restarts_optimizer=n_restarts_optimizer).fit(coord, interest_data)
-    return gpr
-
 def get_2d_test_grid(x_extent, y_extent):
+
     XY_grid = np.array(np.meshgrid(x_extent, y_extent)).T
     XY_test = XY_grid.reshape(-1,2)
     return XY_test, XY_grid
@@ -63,9 +43,40 @@ def get_3d_test_data(test_2d_coords, time_stamp):
     XYT_test = np.concatenate((test_2d_coords , np.full((test_2d_coords.shape[0], 1),time_stamp)),axis=1)
     return XYT_test
 
-def predict_map(gpr, test_data, grid_shape):
+def noisy_samples(interest_var, noise_std, zero_threshold):
+
+    interest_var = interest_var + (noise_std ** 2 * np.random.randn(len(interest_var))).reshape(-1,1) #added noise
+    if(zero_threshold): # threshold negative values to 0
+        interest_var = interest_var.clip(min=0) #ignoring negative rct values
+    return interest_var
+
+def RBF_kernel(sigma_f, sigma_f_bounds, lengthscale, lengthscale_bounds):
+
+    return C(constant_value = sigma_f ** 2, constant_value_bounds = (sigma_f_bounds[0] ** 2, sigma_f_bounds[1] ** 2) ) * \
+            RBF(length_scale = lengthscale, length_scale_bounds = lengthscale_bounds )
+
+def fit_gpr(coord, interest_data, mean_function, kernel, noise_std, n_restarts_optimizer):
+
+    if(mean_function): # mean_function is as a dictionary: coords -> interest_variable_value
+        i = 0
+        for x, y in coord:
+            interest_data[i] = interest_data[i] - mean_function[x, y]
+            i = i +1
+    # Define and Fit GPR
+    if(n_restarts_optimizer==0):
+        gpr = GaussianProcessRegressor(kernel=kernel, alpha=noise_std ** 2, n_restarts_optimizer=0, optimizer=None).fit(coord, interest_data)
+    else:
+        gpr = GaussianProcessRegressor(kernel=kernel, alpha=noise_std ** 2, n_restarts_optimizer=n_restarts_optimizer).fit(coord, interest_data)
+    return gpr
+
+def predict_map(gpr, test_data, mean_function, grid_shape):
 
     pred, std_pred = gpr.predict(test_data, return_std=True)
+
+    if(mean_function): # mean_function is as a dictionary: coords -> interest_variable_value
+        test_prior = np.array(list(mean_function.values())).reshape(len(mean_function), 1)
+        pred = pred + test_prior
+
     pred_grid = np.reshape(pred, grid_shape)
     return pred, pred_grid, std_pred
 
@@ -99,6 +110,7 @@ if __name__ == "__main__":
     coord = load_pickle( data_path + "coord")
     lwc_data = load_pickle( data_path + "lwc_data")
     lwc_extent = load_pickle( data_path + "lwc_extent")
+    dense_prior = {}
 
     x_extent = load_pickle( data_path + "xExtent")
     y_extent = load_pickle( data_path + "yExtent")
@@ -120,52 +132,52 @@ if __name__ == "__main__":
     test_2D_coords, test_grid = get_2d_test_grid(x_extent, y_extent)
 
     ##======1. Fit GPR on all gathered points and predict the whole map at last second!========
-    # gpr = fit_gpr(coord, lwc_data, kernel, noise_std, 0)
-    #
-    # # Test Data
-    # test_time_stamp = coord[-1, 2] # second(timestamp) of last sample
-    # test_2D_coords, test_grid = get_2d_test_grid(x_extent, y_extent)
-    # test_3D_data =  get_3d_test_data(test_2D_coords, test_time_stamp)
-    #
-    # # Predict and show map
-    # pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
-    # show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
+    gpr = fit_gpr(coord, lwc_data, dense_prior, kernel, noise_std, 0)
+
+    # Test Data
+    test_time_stamp = coord[-1, 2] # second(timestamp) of last sample
+    test_2D_coords, test_grid = get_2d_test_grid(x_extent, y_extent)
+    test_3D_data =  get_3d_test_data(test_2D_coords, test_time_stamp)
+
+    # Predict and show map
+    pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, dense_prior, test_grid.shape[:2])
+    show_map(pred_grid, [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, test_time_stamp)
 
     ##======2. Fit GPR each second and predict map/s ========
 
-    if(anim_save):
-        matplotlib.use("Agg")
-        plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
-
-    fig, pred_var = show_map( np.zeros(test_grid.shape[:2]), [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, 0)
-
-    def init():
-        #do nothing
-        pass
-
-    def update(t):
-        gpr = fit_gpr(coord[:t+1], lwc_data[:t+1], kernel, noise_std, 0)
-        test_time_stamp = coord[t, 2]  # second(timestamp) of last sample
-        test_3D_data = get_3d_test_data(test_2D_coords, test_time_stamp)
-
-        pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
-        pred_var.set_data(pred_grid.T)
-        plt.title("Prediction at t = %ds, lengthscales=(%dm, %dm, %ds), sigma_f=%.2e %s" % (test_time_stamp, lengthscale[0], lengthscale[1], lengthscale[2], sigma_f, lwc_unit))
-        plt.scatter(coord[t, 0], coord[t, 1], c="white", marker="x", s=15)
-
-    anim = animation.FuncAnimation(
-        fig,
-        update,
-        frames=range(len(lwc_data)),
-        init_func=init,
-        repeat=False,
-        interval=200,
-        )
-
-    if(anim_save):
-        Writer = animation.writers['ffmpeg']
-        writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
-        anim.save(save_path + 'predict_3d.mp4', writer=writer)
-    else:
-        plt.show(block=False)
-    print("done")
+    # if(anim_save):
+    #     matplotlib.use("Agg")
+    #     plt.rcParams['animation.ffmpeg_path'] = '/home/dlohani/miniconda3/envs/nephelae/bin/ffmpeg'
+    #
+    # fig, pred_var = show_map( np.zeros(test_grid.shape[:2]), [x_extent[0], x_extent[-1], y_extent[0], y_extent[-1]], lwc_unit, lwc_extent, 0)
+    #
+    # def init():
+    #     #do nothing
+    #     pass
+    #
+    # def update(t):
+    #     gpr = fit_gpr(coord[:t+1], lwc_data[:t+1], kernel, noise_std, 0)
+    #     test_time_stamp = coord[t, 2]  # second(timestamp) of last sample
+    #     test_3D_data = get_3d_test_data(test_2D_coords, test_time_stamp)
+    #
+    #     pred, pred_grid, std_pred = predict_map(gpr, test_3D_data, test_grid.shape[:2])
+    #     pred_var.set_data(pred_grid.T)
+    #     plt.title("Prediction at t = %ds, lengthscales=(%dm, %dm, %ds), sigma_f=%.2e %s" % (test_time_stamp, lengthscale[0], lengthscale[1], lengthscale[2], sigma_f, lwc_unit))
+    #     plt.scatter(coord[t, 0], coord[t, 1], c="white", marker="x", s=15)
+    #
+    # anim = animation.FuncAnimation(
+    #     fig,
+    #     update,
+    #     frames=range(len(lwc_data)),
+    #     init_func=init,
+    #     repeat=False,
+    #     interval=200,
+    #     )
+    #
+    # if(anim_save):
+    #     Writer = animation.writers['ffmpeg']
+    #     writer = Writer(fps=10, metadata=dict(artist='Me'), bitrate=1800)
+    #     anim.save(save_path + 'predict_3d.mp4', writer=writer)
+    # else:
+    #     plt.show(block=False)
+    # print("done")
