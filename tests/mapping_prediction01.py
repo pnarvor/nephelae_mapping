@@ -19,7 +19,12 @@ from nephelae_base.types import Bounds
 mesonhPath = '/home/pnarvor/work/nephelae/data/MesoNH-2019-02/REFHR.1.ARMCu.4D.nc'
 rct = MesoNHVariable(MFDataset(mesonhPath), 'RCT')
 
-kernel0 = NephKernel([20.0,50.0,50.0,50.0], noiseVariance = 0.01)
+rctSlice = rct[240,1100,:,:].data
+print("Variance : ", (rctSlice**2).mean())
+
+processVariance    = 1.0e-8
+noiseStddev = 1.0 * np.sqrt(processVariance)
+kernel0 = NephKernel([20.0,50.0,50.0,50.0], variance=processVariance, noiseVariance=noiseStddev**2)
 
 t = np.linspace(0,300.0,300)
 a0 = 400.0
@@ -47,6 +52,8 @@ rctValues = []
 for pos in p:
     rctValues.append(rct[pos[0],pos[3],pos[2],pos[1]])
 rctValues = np.array(rctValues)
+noise     = noiseStddev*np.random.randn(len(rctValues))
+rctValues = rctValues + noise
 
 predictor0 = GprPredictor(p, rctValues, kernel0)
 prediction = predictor0(pPred)
@@ -60,15 +67,9 @@ axes.imshow(rct[240.0,1100.0,:,:].data, origin='lower',
 axes.plot(p0.x, p0.y, 'o')
 axes.plot(p[:,1], p[:,2])
 
-# fig, axes = plt.subplots(1,1)
-# axes.plot(t[1:], np.linalg.norm(p[1:,1:3] - p[:-1, 1:3], axis=1))
-# axes.grid()
-# # axes.legend(loc="upper right")
-# axes.set_xlabel("Time (s)")
-# axes.set_ylabel("Uav velocity (m/s)")
-
 fig, axes = plt.subplots(1,1)
 axes.plot(t, rctValues)
+axes.plot(t, noise)
 axes.grid()
 # axes.legend(loc="upper right")
 axes.set_xlabel("Time (s)")
@@ -79,6 +80,7 @@ predExtent = [predBounds[0].min, predBounds[0].max,
 fig, axes = plt.subplots(1,2,sharex=True,sharey=True)
 axes[0].imshow(prediction[0].reshape([predNbPoints, predNbPoints]),
                label='predicted rct value', origin='lower', extent=predExtent)
+axes[0].plot(p[:,1], p[:,2], '.')
 axes[0].grid()
 # axes[0].legend(loc="upper right")
 axes[0].set_xlabel("East (m)")
@@ -93,12 +95,14 @@ axes[1].set_ylabel("North (m)")
 fig, axes = plt.subplots(1,2,sharex=True,sharey=True)
 axes[0].imshow(prediction[0].reshape([predNbPoints, predNbPoints]),
                label='predicted rct value', origin='lower', extent=predExtent)
+axes[0].plot(p[:,1], p[:,2], '.')
 axes[0].grid()
 # axes[0].legend(loc="upper right")
 axes[0].set_xlabel("East (m)")
 axes[0].set_ylabel("North (m)")
 axes[1].imshow(rct[p0.t,p0.z,predBounds[1].min:predBounds[1].max, predBounds[0].min:predBounds[0].max].data,
                label='ground truth', origin='lower', extent=predExtent)
+axes[0].plot(p[:,1], p[:,2], '.')
 axes[1].grid()
 # axes[1].legend(loc="upper right")
 axes[1].set_xlabel("East (m)")
