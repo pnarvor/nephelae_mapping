@@ -100,10 +100,11 @@ class NephKernel(GprKernel):
         pickle.dump(kernel, open(path, "wb"))
 
 
-    def __init__(self, lengthScales, noiseVariance):
+    def __init__(self, lengthScales, variance, noiseVariance):
         self.lengthScales  = lengthScales
         self.noiseVariance = noiseVariance
-        super().__init__(gpk.RBF(lengthScales) + gpk.WhiteKernel(noiseVariance),
+        self.variance      = variance
+        super().__init__(variance*gpk.RBF(lengthScales) + gpk.WhiteKernel(noiseVariance),
                          lengthScales)
 
 
