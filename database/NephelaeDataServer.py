@@ -71,6 +71,14 @@ class NephelaeDataServer(SpatializedDatabase):
         self.observerSet.attach_observer(observer, 'add_sample')
 
 
+    def remove_gps_observer(self, observer):
+        self.observerSet.detach_observer(observer, 'add_gps')
+
+
+    def remove_sensor_observer(self, observer):
+        self.observerSet.detach_observer(observer, 'add_sample')
+
+
     def __getstate__(self):
         serializedItems = {}
         serializedItems['navFrame']      = self.navFrame
