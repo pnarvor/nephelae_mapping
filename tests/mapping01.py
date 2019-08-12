@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from   matplotlib import animation
 import time
 
-from nephelae_mapping.gprmapping import GprPredictor
+# from nephelae_mapping.gprmapping import GprPredictor
+from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels as gpk
 
 
@@ -28,42 +29,22 @@ trueValues       = process(locations)
 noise            = noiseStd*np.random.randn(len(trueValues))
 observableValues = trueValues + noise
 
-kernel = 10*a * gpk.RBF(length_scale= 0.25 / f0)
+kernel = (a * gpk.RBF(length_scale= 0.25 / f0)) + gpk.WhiteKernel(noiseStd**2)
 
+def do_update():
 
-indexes          = np.random.randint(0,T-1, N)
-obsLocations     = np.array([locations[i]        for i in indexes])
-obsValues        = np.array([observableValues[i] for i in indexes])
-predictor  = GprPredictor(obsLocations.reshape(-1,1), obsValues, kernel, noiseStd)
-prediction = predictor(locations.reshape(-1,1))
-
-time.sleep(1)
-fig, axes = plt.subplots(1,1)
-def init():
-
-    axes.fill_between(locations,
-                      prediction[0].reshape(-1) - 3*prediction[1],
-                      prediction[0].reshape(-1) + 3*prediction[1],
-                      color=[1.0,0.9,0.9])
-    axes.fill_between(locations,
-                      prediction[0].reshape(-1) - prediction[1],
-                      prediction[0].reshape(-1) + prediction[1],
-                      color=[0.9,0.7,0.7])
-    axes.plot(locations, observableValues,      label="Observable values")
-    axes.plot(locations,       trueValues,      label="True values")
-    axes.plot(locations,    prediction[0],      label="Prediction")
-    axes.plot(obsLocations,     obsValues, "o", label="Obs values")
-    axes.grid()
-    axes.legend(loc='upper right')
-
-def update(i):
-    
+    # update values
     indexes          = np.random.randint(0,T-1, N)
     obsLocations     = np.array([locations[i]        for i in indexes])
     obsValues        = np.array([observableValues[i] for i in indexes])
-    predictor  = GprPredictor(obsLocations.reshape(-1,1), obsValues, kernel, noiseStd)
-    prediction = predictor(locations.reshape(-1,1))
+    gprProcessor = GaussianProcessRegressor(kernel,
+                                            alpha=0.0,
+                                            optimizer=None,
+                                            copy_X_train=False)
+    gprProcessor.fit(obsLocations.reshape(-1,1), obsValues.reshape(-1,1))
+    prediction = gprProcessor.predict(locations.reshape(-1,1), return_std=True)
 
+    # update plot
     axes.cla()
     axes.fill_between(locations,
                       prediction[0].reshape(-1) - 3*prediction[1],
@@ -79,20 +60,24 @@ def update(i):
     axes.plot(obsLocations,     obsValues, "o", label="Obs values")
     axes.grid()
     axes.legend(loc='upper right')
+    axes.set_xlim([0,1.0])
+    axes.set_ylim([-2.5*a,2.5*a])
 
-    time.sleep(1.5)
+
+draw = True
+fig, axes = plt.subplots(1,1)
+def init():
+    do_update()
+def update(i):
+    if draw:
+        do_update()
+    # time.sleep(0.5)
 
 anim = animation.FuncAnimation(
     fig,
     update,
     init_func=init,
     interval = 1)
-# anim = animation.FuncAnimation(
-#     fig,
-#     update,
-#     init_func=init,
-#     frames=atmShape.x*atmShape.y,
-#     interval = 1)
 
 plt.show(block=False)
 
