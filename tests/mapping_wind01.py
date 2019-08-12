@@ -11,32 +11,18 @@ import time
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels as gpk
 
-class WindKernel:
+class WindKernel(gpk.Kernel):
 
     """
     Kernel compatible with sklearn.gaussian_process.Kernel
     to be used in GaussianProcessRegressor
 
-    /!\ Hyper parameters for this kernel CANNOT be optimized through sklearn.
+    /!\ Hyper parameters optimizatin HAS NOT BEEN TESTED
     When using with GaussianProcessRegressor, set optimizer=None
 
     /!\ Only implemented for dimension (t,x) for now for testing purposes.
 
     """
-
-    # For compatibility
-    def clone_with_theta(self, theta):
-        return WindKernel(self.tScale, self.xScale,
-                          self.stddev, self.noiseStddev,
-                          self.windSpeed)
-
-
-    def get_params(self, deep=True):
-        return {}
-
-
-    def set_params(self, **params):
-        return
 
 
     # Actually used (maybe)
@@ -49,33 +35,27 @@ class WindKernel:
         self.noiseStddev = noiseStddev
         self.windSpeed   = windSpeed
 
-        # For compatibility
-        self.bounds          = np.array([])
-        self.hyperparameters = []
-        self.n_dims          = 0
-        self.theta           = np.array([])
+    
+    def __call__(self, X, Y=None):
 
-    
-    # def evaluate(self, x, y):
-    #     return self.stddev*
-    
-    def __call__(self, X):
-        # X assumed to be N*2
-        # res = np.diag(self.diag(X))
-        # for i,x in enumerate(X[:-1,:]):
-        #     for j,y in enumerate(X[i+1:,:]):
-        #         res[i,j] = self.evaluate(x,y)
+        if Y is None:
+            Y = X
+
+        # print("X shape: ", X.shape)
+        # print("Y shape: ", X.shape, end="\n\n")
 
         # Far from most efficient but efficiency requires C++ implementation
-        t0,t1 = np.meshgrid(X[:,0], X[:,0])
+        t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij')
         dt = t1 - t0
 
-        x0,x1 = np.meshgrid(X[:,1], X[:,1])
+        x0,x1 = np.meshgrid(X[:,1], Y[:,1], indexing='ij')
         dx = x1 - (x0 + self.windSpeed * dt)
 
         distMat = (dt / self.tScale)**2 + (dx / self.xScale)**2
-
-        return self.stddev*np.exp(-0.5*distMat) + np.diag([self.noiseStddev]*X.shape[0])
+        if Y is X:
+            return self.stddev*np.exp(-0.5*distMat) + np.diag([self.noiseStddev]*X.shape[0])
+        else:
+            return self.stddev*np.exp(-0.5*distMat)
 
 
     def diag(self, X):
@@ -95,8 +75,8 @@ T        = 100
 # N        = 10
 N        = 20
 # v0       = 0.1
-v0       = 0.3
-# v0       = 0.5
+# v0       = 0.3
+v0       = 0.5
 tmax     = 10*v0
 
 def process(t,x):
@@ -109,27 +89,51 @@ ground  = process(tProbe, xProbe)
 noise   = noiseStd*np.random.randn(len(ground))
 samples = ground + noise
 
+margin = 0.3
+span = [max(tProbe) - min(tProbe), max(xProbe) - min(xProbe)]
+T0,X0 = np.meshgrid(
+    np.linspace(min(tProbe) - margin*span[0], max(tProbe) + margin*span[0], 1024),
+    np.linspace(min(xProbe) - margin*span[1], max(xProbe) + margin*span[1], 1024))
 
-# Kernel definition + fit
-# Kernel from sklearn
-kernel0 = ((a**2) * gpk.RBF(length_scale = [l0 / v0, l0])) + gpk.WhiteKernel(noiseStd**2)
+
+print("tScale :",  l0 / v0)
+print("xScale :",  l0)
+# Kernel from sklearn ################################
+# kernel0 = ((a**2) * gpk.RBF(length_scale = [l0 / v0, l0])) + \
+#           gpk.WhiteKernel(noiseStd**2)
+kernel0 = ((a**2) * gpk.RBF(length_scale = [5*l0 / v0, l0])) + \
+          gpk.WhiteKernel(noiseStd**2)
 gprProcessor0 = GaussianProcessRegressor(kernel0,
                                          alpha=0.0,
                                          optimizer=None,
                                          copy_X_train=False)
 gprProcessor0.fit(np.array([tProbe, xProbe]).T, np.array([samples]).T)
-
-# # Custom kernel
-# kernel1 = WindKernel(l0 / v0, l0, a, 
-
-# Prediction
-T0,X0 = np.meshgrid(np.linspace(min(tProbe), max(tProbe), 1024),
-                    np.linspace(min(xProbe), max(xProbe), 1024))
-
 map0, std0 = gprProcessor0.predict(np.array([T0.ravel(), X0.ravel()]).T,
                                    return_std=True)
 map0 = map0.reshape(T0.shape)
 std0 = std0.reshape(T0.shape)
+
+
+# Custom kernel ######################################
+# kernel1 = WindKernel(l0 / v0, l0, a**2, noiseStd**2, 0.0)
+kernel1 = WindKernel(5*l0 / v0, l0, a**2, noiseStd**2, v0)
+gprProcessor1 = GaussianProcessRegressor(kernel1,
+                                         alpha=0.0,
+                                         optimizer=None,
+                                         copy_X_train=False)
+gprProcessor1.fit(np.array([tProbe, xProbe]).T, np.array([samples]).T)
+map1, std1 = gprProcessor1.predict(np.array([T0.ravel(), X0.ravel()]).T,
+                                   return_std=True)
+map1 = map1.reshape(T0.shape)
+std1 = std1.reshape(T0.shape)
+
+######################################################
+
+print("MAP diff :", np.sum((map0.ravel() - map1.ravel())**2))
+print("std diff :", np.sum((std0.ravel() - std1.ravel())**2))
+
+map0[map0 < 0.0] = 0.0
+map1[map1 < 0.0] = 0.0
 
 
 # display only
@@ -142,6 +146,7 @@ axes[0].set_xlabel('Time (s?)')
 axes[0].set_ylabel('Position (m?)')
 axes[0].legend(loc='lower right')
 axes[0].grid()
+axes[0].set_title("Ground truth")
 
 axes[1].plot(tProbe,  ground, label='ground truth')
 axes[1].plot(tProbe, samples, label='samples')
@@ -153,7 +158,7 @@ axes[1].grid()
 
 
 # figure1
-fig, axes = plt.subplots(2,1, sharex=True, sharey=False)
+fig, axes = plt.subplots(2,1, sharex=True, sharey=True)
 axes[0].imshow(map0, origin='lower',
                extent=[T0[0,0], T0[0,-1], X0[0,0], X0[-1,0]], aspect='auto')
 axes[0].plot(tProbe, xProbe, 'o', label='sampling locations')
@@ -161,10 +166,30 @@ axes[0].set_xlabel('Time (s?)')
 axes[0].set_ylabel('Position (m?)')
 axes[0].legend(loc='lower right')
 axes[0].grid()
+axes[0].set_title("Regular RBF kernel")
 
 axes[1].imshow(std0, origin='lower',
                extent=[T0[0,0], T0[0,-1], X0[0,0], X0[-1,0]], aspect='auto')
-axes[1].plot(tProbe, xProbe, 'o', label='sampling locations')
+# axes[1].plot(tProbe, xProbe, 'o', label='sampling locations')
+axes[1].set_xlabel('Time (s?)')
+axes[1].set_ylabel('Position (m?)')
+axes[1].legend(loc='lower right')
+axes[1].grid()
+
+# figure2
+fig, axes = plt.subplots(2,1, sharex=True, sharey=True)
+axes[0].imshow(map1, origin='lower',
+               extent=[T0[0,0], T0[0,-1], X0[0,0], X0[-1,0]], aspect='auto')
+axes[0].plot(tProbe, xProbe, 'o', label='sampling locations')
+axes[0].set_xlabel('Time (s?)')
+axes[0].set_ylabel('Position (m?)')
+axes[0].legend(loc='lower right')
+axes[0].grid()
+axes[0].set_title("\"Wind\" kernel")
+
+axes[1].imshow(std1, origin='lower',
+               extent=[T0[0,0], T0[0,-1], X0[0,0], X0[-1,0]], aspect='auto')
+# axes[1].plot(tProbe, xProbe, 'o', label='sampling locations')
 axes[1].set_xlabel('Time (s?)')
 axes[1].set_ylabel('Position (m?)')
 axes[1].legend(loc='lower right')
