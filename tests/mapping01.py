@@ -19,7 +19,7 @@ a        = 2.0
 f0       = 3.0
 T        = 1000
 # N        = 10
-N        = 20
+N        = 10
 
 def process(x):
     return a*np.sin(2.0*np.pi*f0*x)
@@ -29,12 +29,13 @@ trueValues       = process(locations)
 noise            = noiseStd*np.random.randn(len(trueValues))
 observableValues = trueValues + noise
 
-kernel = (a * gpk.RBF(length_scale= 0.25 / f0)) + gpk.WhiteKernel(noiseStd**2)
+kernel = ((a**2) * gpk.RBF(length_scale= 0.25 / f0)) + gpk.WhiteKernel(noiseStd**2)
 
 def do_update():
 
     # update values
-    indexes          = np.random.randint(0,T-1, N)
+    # indexes          = np.random.randint(0,T-1, N)
+    indexes          = np.random.randint(int(T/4.0), int(3.0*T/4.0), N)
     obsLocations     = np.array([locations[i]        for i in indexes])
     obsValues        = np.array([observableValues[i] for i in indexes])
     gprProcessor = GaussianProcessRegressor(kernel,
@@ -71,7 +72,7 @@ def init():
 def update(i):
     if draw:
         do_update()
-    # time.sleep(0.5)
+    time.sleep(0.5)
 
 anim = animation.FuncAnimation(
     fig,

@@ -11,6 +11,80 @@ import time
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels as gpk
 
+class WindKernel:
+
+    """
+    Kernel compatible with sklearn.gaussian_process.Kernel
+    to be used in GaussianProcessRegressor
+
+    /!\ Hyper parameters for this kernel CANNOT be optimized through sklearn.
+    When using with GaussianProcessRegressor, set optimizer=None
+
+    /!\ Only implemented for dimension (t,x) for now for testing purposes.
+
+    """
+
+    # For compatibility
+    def clone_with_theta(self, theta):
+        return WindKernel(self.tScale, self.xScale,
+                          self.stddev, self.noiseStddev,
+                          self.windSpeed)
+
+
+    def get_params(self, deep=True):
+        return {}
+
+
+    def set_params(self, **params):
+        return
+
+
+    # Actually used (maybe)
+    def __init__(self, tScale=1.0, xScale=1.0,
+                       stddev=1.0, noiseStddev=0.1,
+                       windSpeed=0.0):
+        self.tScale      = tScale
+        self.xScale      = xScale
+        self.stddev      = stddev
+        self.noiseStddev = noiseStddev
+        self.windSpeed   = windSpeed
+
+        # For compatibility
+        self.bounds          = np.array([])
+        self.hyperparameters = []
+        self.n_dims          = 0
+        self.theta           = np.array([])
+
+    
+    # def evaluate(self, x, y):
+    #     return self.stddev*
+    
+    def __call__(self, X):
+        # X assumed to be N*2
+        # res = np.diag(self.diag(X))
+        # for i,x in enumerate(X[:-1,:]):
+        #     for j,y in enumerate(X[i+1:,:]):
+        #         res[i,j] = self.evaluate(x,y)
+
+        # Far from most efficient but efficiency requires C++ implementation
+        t0,t1 = np.meshgrid(X[:,0], X[:,0])
+        dt = t1 - t0
+
+        x0,x1 = np.meshgrid(X[:,1], X[:,1])
+        dx = x1 - (x0 + self.windSpeed * dt)
+
+        distMat = (dt / self.tScale)**2 + (dx / self.xScale)**2
+
+        return self.stddev*np.exp(-0.5*distMat) + np.diag([self.noiseStddev]*X.shape[0])
+
+
+    def diag(self, X):
+        return np.array([self.stddev + self.noiseStddev]*X.shape[0])
+
+
+    def is_stationary(self):
+        return True
+
 
 # noiseStd = 1.0
 noiseStd = 0.1
@@ -37,16 +111,21 @@ samples = ground + noise
 
 
 # Kernel definition + fit
-kernel0 = (a * gpk.RBF(length_scale = [l0 / v0, l0])) + gpk.WhiteKernel(noiseStd**2)
+# Kernel from sklearn
+kernel0 = ((a**2) * gpk.RBF(length_scale = [l0 / v0, l0])) + gpk.WhiteKernel(noiseStd**2)
 gprProcessor0 = GaussianProcessRegressor(kernel0,
                                          alpha=0.0,
                                          optimizer=None,
                                          copy_X_train=False)
 gprProcessor0.fit(np.array([tProbe, xProbe]).T, np.array([samples]).T)
 
+# # Custom kernel
+# kernel1 = WindKernel(l0 / v0, l0, a, 
 
+# Prediction
 T0,X0 = np.meshgrid(np.linspace(min(tProbe), max(tProbe), 1024),
                     np.linspace(min(xProbe), max(xProbe), 1024))
+
 map0, std0 = gprProcessor0.predict(np.array([T0.ravel(), X0.ravel()]).T,
                                    return_std=True)
 map0 = map0.reshape(T0.shape)
