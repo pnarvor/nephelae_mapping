@@ -88,11 +88,17 @@ rctSlice = rct[240,1100,:,:].data
 print("Variance : ", (rctSlice**2).mean())
 
 t = np.linspace(0,300.0,300)
-a0 = 400.0
+# a0 = 400.0
+a0 = 250.0
+f0 = - 1 / 120.0
+# f0 = 1 / 150.0
+
 a1 = 0.0
-f0 = 1 / 120.0
 # f1 = 1.5*f0
 f1 = 2.5*f0
+# f1 = -1.3*f0
+# f1 = -2.5*f0
+# f1 = -4.5*f0
 
 tStart = 50.0
 tEnd   = 700.0
@@ -105,20 +111,33 @@ p  = np.array([[p0.t, p0.x, p0.y, p0.z]]*len(t))
 v0 = np.array([8.5, 0.9])
 
 p[:,0] = t
-p[:,1:3] = p[:,1:3] + (t - tStart).reshape([len(t), 1]) @ v0.reshape([1,2]) 
 p[:,1] = p[:,1] + a0*(a1 + np.cos(2*np.pi*f1*(t-t[0])))*np.cos(2*np.pi*f0*(t-t[0]))
 p[:,2] = p[:,2] + a0*(a1 + np.cos(2*np.pi*f1*(t-t[0])))*np.sin(2*np.pi*f0*(t-t[0]))
+print("Max velocity relative to wind :",
+    max(np.sqrt(np.sum((p[1:,1:3] - p[:-1,1:3])**2, axis=1)) / (p[1:,0] - p[:-1,0])))
+p[:,1:3] = p[:,1:3] + (t - tStart).reshape([len(t), 1]) @ v0.reshape([1,2]) 
 
 # building prediction locations
+# X0,Y0 = np.meshgrid(
+#     np.linspace(rct.bounds[3][0], rct.bounds[3][-1], rct.shape[3]),
+#     np.linspace(rct.bounds[2][0], rct.bounds[2][-1], rct.shape[2]))
+b = rct.bounds
+yBounds = [min(p[:,2]), max(p[:,2])]
+tmp = rct[p0.t,p0.z,yBounds[0]:yBounds[1],:]
 X0,Y0 = np.meshgrid(
-    np.linspace(rct.bounds[3][0], rct.bounds[3][-1], rct.shape[3]),
-    np.linspace(rct.bounds[2][0], rct.bounds[2][-1], rct.shape[2]))
+    np.linspace(tmp.bounds[1][0], tmp.bounds[1][-1], tmp.shape[1]),
+    np.linspace(tmp.bounds[0][0], tmp.bounds[0][-1], tmp.shape[0]))
 xyLocations = np.array([[0]*X0.shape[0]*X0.shape[1], X0.ravel(), Y0.ravel()]).T
+b[2].min = yBounds[0]
+b[2].max = yBounds[1]
 
 # Kernel
 processVariance    = 1.0e-8
 noiseStddev = 0.1 * np.sqrt(processVariance)
-lengthScales = [100, 50, 50]
+# lengthScales = [100, 50, 50]
+# lengthScales = [70, 50, 50]
+lengthScales = [70, 60, 60]
+# lengthScales = [140, 120, 120]
 kernel0 = WindKernel(lengthScales, processVariance, noiseStddev**2, v0)
 
 rctValues = []
@@ -136,8 +155,9 @@ rctValues = rctValues + noise
 # fig, axes = plt.subplots(1,1)
 # axes.plot(p[:,0], np.array(rctValues))
 
-fig, axes = plt.subplots(1,2)
-b = rct.bounds
+profiling = False
+if not profiling:
+    fig, axes = plt.subplots(3,1,sharex=True,sharey=True)
 simTime = p0.t
 lastTime = time.time()
 simSpeed = 50.0
@@ -145,24 +165,17 @@ simSpeed = 50.0
 def do_update(t):
 
     print("Sim time :", t)
-    global axes
-    axes[0].cla()
-    axes[0].imshow(rct[t,p0.z,:,:].data, origin='lower',
-                   extent=[b[3].min, b[3].max, b[2].min, b[2].max])
-    # axes[0].plot(p0.x, p0.y, 'o')
-    try:
-        axes[0].plot(p[:int(t-tStart + 0.5),1], p[:int(t-tStart + 0.5),2], '.')
-    finally:
-        pass
-
     # prediction
     gprProcessor0 = GaussianProcessRegressor(kernel0,
                                              alpha=0.0,
                                              optimizer=None,
                                              copy_X_train=False)
+    # trainSet = np.array([list(pos) + [rctVal] \
+    #                     for pos, rctVal in zip(p[:,0:3],rctValues)\
+    #                     if pos[0] < t and pos[0] > t - 2*lengthScales[0]])
     trainSet = np.array([list(pos) + [rctVal] \
                         for pos, rctVal in zip(p[:,0:3],rctValues)\
-                        if pos[0] < t and pos[0] > t - 2*lengthScales[0]])
+                        if pos[0] < t and pos[0] > t - 3*lengthScales[0]])
     print("Number of used measures samples :", trainSet.shape[0])
     gprProcessor0.fit(trainSet[:,:-1], trainSet[:,-1])
 
@@ -171,10 +184,32 @@ def do_update(t):
     map0[map0 < 0.0] = 0.0
     map0 = map0.reshape(X0.shape)
     std0 = std0.reshape(X0.shape)
-    
-    axes[1].cla()
-    axes[1].imshow(map0, origin='lower',
-                   extent=[b[3].min, b[3].max, b[2].min, b[2].max])
+   
+    # display
+    if not profiling:
+        global axes
+        axes[0].cla()
+        axes[0].imshow(rct[t,p0.z,yBounds[0]:yBounds[1],:].data, origin='lower',
+                       extent=[b[3].min, b[3].max, b[2].min, b[2].max])
+        axes[0].grid()
+        axes[0].set_title("Ground truth")
+
+        try:
+            axes[0].plot(p[:int(t-tStart + 0.5),1], p[:int(t-tStart + 0.5),2], '.')
+        finally:
+            pass
+
+        axes[1].cla()
+        axes[1].imshow(map0, origin='lower',
+                       extent=[b[3].min, b[3].max, b[2].min, b[2].max])
+        axes[1].grid()
+        axes[1].set_title("MAP")
+
+        axes[2].cla()
+        axes[2].imshow(std0**2, origin='lower',
+                       extent=[b[3].min, b[3].max, b[2].min, b[2].max])
+        axes[2].grid()
+        axes[2].set_title("Variance AP")
 
 def init():
     pass
@@ -185,18 +220,20 @@ def update(i):
     # currentTime = time.time()
     # simTime = simTime + simSpeed*(currentTime - lastTime)
     # lastTime = currentTime
-    simTime = simTime + 5.0
+    # simTime = simTime + 5.0
+    simTime = simTime + 2.0
 
     do_update(simTime)
 
-anim = animation.FuncAnimation(
-    fig,
-    update,
-    init_func=init,
-    interval = 1)
-
-plt.show(block=False)
-
-
-
+if not profiling:
+    anim = animation.FuncAnimation(
+        fig,
+        update,
+        init_func=init,
+        interval = 1)
+    
+    plt.show(block=False)
+else:
+    while simTime < 600:
+        update(0)
 
