@@ -49,16 +49,19 @@ class WindKernel(gpk.Kernel):
         # print("X shape: ", X.shape)
         # print("Y shape: ", X.shape, end="\n\n")
 
-        # Far from most efficient but efficiency requires C++ implementation
-        t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij')
+        cop = False
+        # cop = True
+
+        # Far from most efficient but efficiency requires C++ implementation (or is it ?)
+        t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij', copy=cop)
         dt = t1 - t0
         distMat = (dt / self.lengthScale[0])**2
 
-        x0,x1 = np.meshgrid(X[:,1], Y[:,1], indexing='ij')
+        x0,x1 = np.meshgrid(X[:,1], Y[:,1], indexing='ij', copy=cop)
         dx = x1 - (x0 + self.windSpeed[0] * dt)
         distMat = distMat + (dx / self.lengthScale[1])**2
 
-        x0,x1 = np.meshgrid(X[:,2], Y[:,2], indexing='ij')
+        x0,x1 = np.meshgrid(X[:,2], Y[:,2], indexing='ij', copy=cop)
         dx = x1 - (x0 + self.windSpeed[1] * dt)
         distMat = distMat + (dx / self.lengthScale[2])**2
 
@@ -155,7 +158,8 @@ rctValues = rctValues + noise
 # fig, axes = plt.subplots(1,1)
 # axes.plot(p[:,0], np.array(rctValues))
 
-profiling = False
+# profiling = False
+profiling = True
 if not profiling:
     fig, axes = plt.subplots(3,1,sharex=True,sharey=True)
 simTime = p0.t
@@ -234,6 +238,8 @@ if not profiling:
     
     plt.show(block=False)
 else:
+    t0 = time.time()
     while simTime < 600:
         update(0)
+    print("Ellapsed :", time.time() - t0, "s")
 
