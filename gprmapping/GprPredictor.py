@@ -41,7 +41,7 @@ class GprPredictor(MapInterface):
                                                 copy_X_train=False)
 
 
-    def at_locations(self, locations):
+    def at_locations(self, locations, returnStddev=True):
 
         # ############## WRRRROOOOOOOOOOOOOOOOOOOOOOONNG #####################
         # # Must take all data otherwise prediction not possible because outside 
@@ -58,16 +58,19 @@ class GprPredictor(MapInterface):
         # (same time location will probably be asked more often anyway)
         dataBounds = self.database.find_bounds(self.databaseTags)[0]
         kernelSpan = self.kernel.span()[0]
-        locBounds = Bounds(locations[0,0], locations[-1,0])
+        locBounds = Bounds(locations[0,0], locations[-1,0])\
+
+        print("locBounds : ",   locBounds)
+        print("dataBounds : ", dataBounds)
 
         locBounds.min = max([locBounds.min, dataBounds.min])
         locBounds.max = min([locBounds.max, dataBounds.max])
-        locBounds.min = locBounds.min - kernelWidth
-        locBounds.max = locBounds.max + kernelWidth
+        locBounds.min = locBounds.min - kernelSpan
+        locBounds.max = locBounds.max + kernelSpan
        
         samples = [entry.data for entry in \
             self.database.find_entries(self.databaseTags,
-                                       (slice(locBounds.min, locBound.max),))]
+                                       (slice(locBounds.min, locBounds.max),))]
         
         trainLocations =\
             np.array([[s.position.x,\
@@ -75,9 +78,26 @@ class GprPredictor(MapInterface):
                        s.position.y,\
                        s.position.z]\
                        for s in samples])
-        trainValues = np.array([s.data.data for s in samples])
+        # trainValues = np.array([s.data.data for s in samples])
+        trainValues = np.array([s.data for s in samples])
         self.gprProc.fit(trainLocations, trainValues)
-        return self.gprProc.predict(locations, return_std=True)
+        return self.gprProc.predict(locations, return_std=returnStddev)
+
+
+    def shape(self):
+        return (None, None, None, None)
+
+
+    def span(self):
+        return (None, None, None, None)
+
+
+    def bounds(self):
+        return (None, None, None, None)
+
+
+    def resolution(self):
+        return self.kernel.resolution()
 
 
 

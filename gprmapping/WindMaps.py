@@ -4,7 +4,7 @@ from nephelae_base.types import Bounds
 
 from .MapInterface import MapInterface
 
-def WindMapConstant(MapInterface):
+class WindMapConstant(MapInterface):
 
     """WindConstant
     
@@ -21,7 +21,7 @@ def WindMapConstant(MapInterface):
 
 
     def at_locations(self, locations):
-        return np.array(self.wind*locations.shape[0])
+        return np.array([self.wind]*locations.shape[0])
 
 
     def shape(self):

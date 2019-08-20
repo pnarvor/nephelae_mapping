@@ -3,6 +3,7 @@ import numpy as np
 import numpy.fft as npfft
 import pickle
 import sklearn.gaussian_process.kernels as gpk
+from   scipy.spatial.distance import cdist
 
 class NephKernel(gpk.Kernel):
 
@@ -24,7 +25,7 @@ class NephKernel(gpk.Kernel):
 
     def __init__(self, lengthScale, variance, noiseVariance):
 
-        self.lengthScale   = lengthScale
+        self.lengthScales  = lengthScale
         self.variance      = variance
         self.noiseVariance = noiseVariance
 
@@ -34,8 +35,8 @@ class NephKernel(gpk.Kernel):
         if Y is None:
             Y = X
 
-        distMat = cdist(X / self.lengthScale,
-                        Y / self.lengthScale,
+        distMat = cdist(X / self.lengthScales,
+                        Y / self.lengthScales,
                         metric='sqeuclidian')
         if Y is X:
             return self.variance*np.exp(-0.5*distMat)\
@@ -74,12 +75,12 @@ class WindKernel(NephKernel):
     """
 
     # Actually used (maybe)
-    def __init__(self, lengthScale, variance, noiseVariance, windMap):
+    def __init__(self, lengthScales, variance, noiseVariance, windMap):
         """
 
         windMap : A MapInterface instance returning xy wind values.
         """
-        super().__init__(lengthScale, variance, noiseVariance)
+        super().__init__(lengthScales, variance, noiseVariance)
         self.windMap = windMap
 
     
@@ -92,25 +93,28 @@ class WindKernel(NephKernel):
         # print("Y shape: ", X.shape, end="\n\n")
 
         wind = self.windMap.at_locations(Y)
+        print(Y.shape)
+        print(wind.shape)
 
         # Far from most efficient but efficiency requires C++ implementation (or is it ?)
         t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij', copy=False)
         dt = t1 - t0
-        distMat = (dt / self.lengthScale[0])**2
+        distMat = (dt / self.lengthScales[0])**2
 
         x0,x1 = np.meshgrid(X[:,1],    Y[:,1], indexing='ij', copy=False)
         x0,w1 = np.meshgrid(X[:,1], wind[:,0], indexing='ij', copy=False)
         dx = x1 - (x0 + w1 * dt)
-        distMat = distMat + (dx / self.lengthScale[1])**2
+        distMat = distMat + (dx / self.lengthScales[1])**2
 
         x0,x1 = np.meshgrid(X[:,2],    Y[:,2], indexing='ij', copy=False)
         x0,w1 = np.meshgrid(X[:,2], wind[:,1], indexing='ij', copy=False)
         dx = x1 - (x0 + w1 * dt)
-        distMat = distMat + (dx / self.lengthScale[2])**2
-
-        distMat = distMat + cdist(X[:,2] / self.lengthScale[3],
-                                  Y[:,2] / self.lengthScale[3],
-                                  metric='sqeuclidian')
+        distMat = distMat + (dx / self.lengthScales[2])**2
+        
+        print(X[:,2].shape)
+        distMat = distMat + cdist((X[:,2] / self.lengthScales[3]).reshape(-1,1),
+                                  (Y[:,2] / self.lengthScales[3]).reshape(-1,1),
+                                  metric='sqeuclidean')
 
         if Y is X:
             return self.variance*np.exp(-0.5*distMat)\
