@@ -1,6 +1,7 @@
 import threading
 import time
 
+from nephelae_base.types import NavigationRef
 from nephelae_base.types import Position
 from nephelae_base.types import SensorSample
 from nephelae_base.types import MultiObserverSubject
@@ -24,7 +25,7 @@ class NephelaeDataServer(SpatializedDatabase):
     def __init__(self):
         super().__init__() 
 
-        self.navFrame      = None
+        self.navFrame      = NavigationRef()
         self.observerSet   = MultiObserverSubject(['add_gps', 'add_sample'])
         self.uavIds        = []
         self.variableNames = []
