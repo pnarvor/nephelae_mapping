@@ -4,80 +4,89 @@ import numpy.fft as npfft
 import pickle
 import sklearn.gaussian_process.kernels as gpk
 
-class GprKernel:
 
-    """GprKernel
-    Wrapper class around scikit learn kernels
 
-    This is to add some helper attributes.
-    (Mainly to deduce the ideal sampling frequency of the kernel).
+class WindKernel(gpk.Kernel):
+
+    """WindKernel
+    Kernel compatible with sklearn.gaussian_process.Kernel
+    to be used in GaussianProcessRegressor.
+
+    Is equivalent to a scikit-learn RBF kernel with white noise.
     
+    /!\ Hyper parameters optimizatin HAS NOT BEEN TESTED
+    When using with GaussianProcessRegressor, set optimizer=None
+
+    /!\ Only implemented for dimension (t,x,y,z). (only (t,x,y) won't work)
     """
 
-    def __init__(self, kernel, resolutions=None):
-        self.kernel = kernel
-        if resolutions is None:
-            self.optimalResolutions = self.compute_optimal_resolutions()
+    # Actually used (maybe)
+    def __init__(self, processLengthScale, processVariance, noiseVariance, windMap):
+        """
+
+        windMap : A MapInterface instance returning xy wind values.
+        """
+        self.lengthScale = lengthScale
+        self.stddev      = stddev
+        self.noiseStddev = noiseStddev
+        self.windMap     = windMap
+
+    
+    def __call__(self, X, Y=None):
+
+        if Y is None:
+            Y = X
+
+        # print("X shape: ", X.shape)
+        # print("Y shape: ", X.shape, end="\n\n")
+
+        wind = self.windMap.at_locations(Y)
+
+        # Far from most efficient but efficiency requires C++ implementation (or is it ?)
+        t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij', copy=False)
+        dt = t1 - t0
+        distMat = (dt / self.lengthScale[0])**2
+
+        x0,x1 = np.meshgrid(X[:,1], Y[:,1], indexing='ij', copy=False)
+        x0,w1 = np.meshgrid(X[:,1], wind[:,0], indexing='ij', copy=False)
+        dx = x1 - (x0 + w1 * dt)
+        distMat = distMat + (dx / self.lengthScale[1])**2
+
+        x0,x1 = np.meshgrid(X[:,2], Y[:,2], indexing='ij', copy=False)
+        x0,w1 = np.meshgrid(X[:,2], wind[:,1], indexing='ij', copy=False)
+        dx = x1 - (x0 + w1 * dt)
+        distMat = distMat + (dx / self.lengthScale[2])**2
+
+        distMat = distMat + cdist(X[:,2] / self.lengthScale[3],
+                                  Y[:,2] / self.lengthScale[3],
+                                  metric='sqeuclidian')
+
+        if Y is X:
+            return self.stddev*np.exp(-0.5*distMat) + np.diag([self.noiseStddev]*X.shape[0])
         else:
-            if len(resolutions) != len(self.kernel_length_scales()):
-                raise ValueError("resolutions paramater must the same dimension as the kernel")
-            self.optimalResolutions = resolutions
- 
-
-    def __call__(self, X, Y=None, eval_gradient=False):
-        return self.kernel(X, Y, eval_gradient)
+            return self.stddev*np.exp(-0.5*distMat)
 
 
-    def kernel_length_scales(self):
-        keyLengthScale = [key for key in self.kernel.get_params()
-                          if 'length_scale' in key and not 'bounds' in key]
-        return self.kernel.get_params()[keyLengthScale[0]]
+    def diag(self, X):
+        return np.array([self.stddev + self.noiseStddev]*X.shape[0])
 
 
-    def values(self, locations):
-        origin = np.zeros(len(locations[0]))
-        res = []
-        for point in locations:
-            res.append(self.kernel(np.vstack([point, origin]))[0,1])
-        return np.array(res)
+    def is_stationary(self):
+        return True
 
 
-    def compute_optimal_resolutions(self):
-        # N = 4096 # find a criteria ? 
-        lengthScaleFactor = 256
-        # N = 512 # find a criteria ? 
-        # N = 128 * lengthScaleFactor
-        N = 32 * lengthScaleFactor
-        resolutions = []
+    def resolution(self):
+        # Value computed by estimating the cutting frequency of the RBF kernel
+        # The kernel is the autocorrelation of the process and thus its fourier
+        # transform is the power spectrum of the process.
+        # Resolution is then computed as the inverse of twice the frequency
+        # where the spectrum falls below -60db (shannon's theorem)
+        return 0.84 * np.array(self.lengthScales)
 
-        lengthScales = self.kernel_length_scales()
-        if isinstance(lengthScales, float):
-            lengthScales = [lengthScales]
 
-        for dimIndex, lengthScale in enumerate(lengthScales):
-            samplingRate = N / (2*lengthScaleFactor*lengthScale)
-
-            # Generating a set of locations along the dimension to evaluate
-            # (centered to simplify the fft evaluation
-            locations = np.zeros([N, len(lengthScales)])
-            locations[:,dimIndex] = np.linspace(-lengthScaleFactor*lengthScale,
-                                                 lengthScaleFactor*lengthScale, N)
-
-            # Evaluating the kernel values at these locations
-            # (/!\ not the matrix k(X,X) /!\)
-            kernelValues = self.values(locations)
-
-            # Evaluating optimal resolution in Fourier space (Nyquist-Shannon theorem)
-            ft = np.abs(npfft.fft(kernelValues))
-            ftmin = min([a for a in ft if a > 0])
-            ft[ft < ftmin] = ftmin
-            ft = ft / np.max(ft) # max spectrum value will be 1.0, so 0.0 in db
-            ft = 10*np.log10(ft) # spectrum in db
-
-            # fc = (np.argmax(ft < -20) / N) * samplingRate == frequency where spectrum(kernel) < 20db
-            # So optimal sampling frequency is f0 = 2.0*fc, hence optimal resolution is 1.0 / f0
-            resolutions.append(1.0 / (2.0 * (np.argmax(ft < -20) / N) * samplingRate))
-        return resolutions
+    def span(self):
+        # Distance from which a sample is deemed negligible
+        return 3.0 * np.array(self.lengthScales)
 
 
 class NephKernel(GprKernel):
