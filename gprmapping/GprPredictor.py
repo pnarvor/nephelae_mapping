@@ -43,19 +43,54 @@ class GprPredictor(MapInterface):
 
     def at_locations(self, locations):
 
+        # ############## WRRRROOOOOOOOOOOOOOOOOOOOOOONNG #####################
+        # # Must take all data otherwise prediction not possible because outside 
+        # # locations
+        # searchKeys = [slice(b.min,b.max) for b in Bounds.from_array(locations.T)]
+        # samples = [entry.data for entry in \
+        #            self.database.find_entries(self.databaseTags, tuple(searchKeys)]
 
+        # Finding bounds of data we currently have then compute
+        # proper bounds of data to request. This ensure we have some data
+        # to make predictions on.
+        # Here only time limts are considered
+        # locations are assumed to be sorted in increasing time order
+        # (same time location will probably be asked more often anyway)
+        dataBounds = self.database.find_bounds(self.databaseTags)[0]
+        kernelSpan = self.kernel.span()[0]
+        locBounds = Bounds(locations[0,0], locations[-1,0])
 
-        ############## WRRRROOOOOOOOOOOOOOOOOOOOOOONNG #####################
-        # Must take all data otherwise prediction not possible because outside 
-        # locations
-        searchKeys = [slice(b.min,b.max) for b in Bounds.from_array(locations.T)]
+        locBounds.min = max([locBounds.min, dataBounds.min])
+        locBounds.max = min([locBounds.max, dataBounds.max])
+        locBounds.min = locBounds.min - kernelWidth
+        locBounds.max = locBounds.max + kernelWidth
+       
         samples = [entry.data for entry in \
-                   self.database.find_entries(self.databaseTags, tuple(searchKeys)]
+            self.database.find_entries(self.databaseTags,
+                                       (slice(locBounds.min, locBound.max),))]
+        
         trainLocations =\
-            np.array([[s.position.x, s.position.x, s.position.y, s.position.z] for s in samples])
+            np.array([[s.position.x,\
+                       s.position.x,\
+                       s.position.y,\
+                       s.position.z]\
+                       for s in samples])
         trainValues = np.array([s.data.data for s in samples])
         self.gprProc.fit(trainLocations, trainValues)
+        return self.gprProc.predict(locations, return_std=True)
 
 
+    def __getitem__(self, keys):
+        params = []
+        for key, res in zip(keys, self.kernel.resolution):
+            if isinstance(key, slice):
+                size = int((key.stop - key.start)*res) + 1
+                params.append(np.linspace(key.start, ker.start+(size-1)*res, size))
+            else:
+                params.append(key)
+        T,X,Y,Z = np.meshgrid(params[0], params[1], params[2], params[3])
+        locations = np.array([T.ravel(), X.ravel(), Y.ravel(), Z.ravel()])
+        map0, std0 = self.predict(locations[np.argsort(locations[:,0])]) 
 
+        return map0.reshape(T.shape).squeeze(), std0.reshape(T,shape).squeeze()
 
