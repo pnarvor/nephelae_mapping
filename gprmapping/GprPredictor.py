@@ -80,17 +80,4 @@ class GprPredictor(MapInterface):
         return self.gprProc.predict(locations, return_std=True)
 
 
-    def __getitem__(self, keys):
-        params = []
-        for key, res in zip(keys, self.kernel.resolution):
-            if isinstance(key, slice):
-                size = int((key.stop - key.start)*res) + 1
-                params.append(np.linspace(key.start, ker.start+(size-1)*res, size))
-            else:
-                params.append(key)
-        T,X,Y,Z = np.meshgrid(params[0], params[1], params[2], params[3])
-        locations = np.array([T.ravel(), X.ravel(), Y.ravel(), Z.ravel()])
-        map0, std0 = self.predict(locations[np.argsort(locations[:,0])]) 
-
-        return map0.reshape(T.shape).squeeze(), std0.reshape(T,shape).squeeze()
 
