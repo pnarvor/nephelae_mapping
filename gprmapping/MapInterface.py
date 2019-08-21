@@ -1,5 +1,9 @@
 # abc = abstract class
 import abc
+import numpy as np
+
+from nephelae_simulation.mesonh_interface import ScaledArray
+from nephelae_simulation.mesonh_interface import DimensionHelper
 
 class MapInterface(abc.ABC):
 
@@ -82,19 +86,40 @@ class MapInterface(abc.ABC):
             numpy.array with values (squeezed in collapsed dimensions)
         """
 
+        # print("keys :", keys)
+        # print("resolution :", self.resolution())
+
         params = []
         for key, res in zip(keys, self.resolution()):
             if isinstance(key, slice):
-                size = int((key.stop - key.start)*res) + 1
-                params.append(np.linspace(key.start, ker.start+(size-1)*res, size))
+                size = int((key.stop - key.start) / res) + 1
+                params.append(np.linspace(key.start, key.start+(size-1)*res, size))
             else:
                 params.append(key)
+
         T,X,Y,Z = np.meshgrid(params[0], params[1], params[2], params[3],
-                              indexing='ij', copy=False)
-        locations = np.array([T.ravel(), X.ravel(), Y.ravel(), Z.ravel()])
+                              indexing='xy', copy=False)
+        locations = np.array([T.ravel(), X.ravel(), Y.ravel(), Z.ravel()]).T
 
-        # map0, std0 = self.at_locations(locations[np.argsort(locations[:,0])]) 
-        # return map0.reshape(T.shape).squeeze(), std0.reshape(T,shape).squeeze()
-        return self.at_locations(locations[np.argsort(locations[:,0])]).reshape(T.shape).squeeze()
-
+        # check this (sorting ?)
+        # pred = self.at_locations(locations[np.argsort(locations[:,0]),:])
+        # pred = self.at_locations(locations, False)
+        pred = self.at_locations(locations, True)
+        if isinstance(pred, (list, tuple)):
+            res = []
+            for p in pred:
+                # Building dimensions of output array
+                dims = DimensionHelper()
+                for param in params:
+                    if np.array(param).shape:
+                        dims.add_dimension(param, 'LUT')
+                res.append(ScaledArray(p.reshape(T.shape).squeeze(), dims))
+            return res
+        else:
+            # Building dimensions of output array
+            dims = DimensionHelper()
+            for param in params:
+                if np.array(param).shape:
+                    dims.add_dimension(param, 'LUT')
+            return ScaledArray(pred.reshape(T.shape).squeeze(), dims)
 

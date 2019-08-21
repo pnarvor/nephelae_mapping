@@ -1,5 +1,9 @@
 #! /usr/bin/python3
 
+# changing process priority (linux only)
+import os
+# os.nice(-19) # probably a bit harsh (requires sudo)
+
 import sys
 sys.path.append('../../')
 import numpy as np
@@ -7,6 +11,7 @@ import numpy.fft as npfft
 import matplotlib.pyplot as plt
 from   matplotlib import animation
 import time
+
 
 from netCDF4 import MFDataset
 from nephelae_simulation.mesonh_interface import MesoNHVariable
@@ -51,19 +56,33 @@ def parameters(rct):
     p[:,2] = p[:,2] + a0*(a1 + np.cos(2*np.pi*f1*(t-t[0])))*np.sin(2*np.pi*f0*(t-t[0]))
     print("Max velocity relative to wind :",
         max(np.sqrt(np.sum((p[1:,1:3] - p[:-1,1:3])**2, axis=1)) / (p[1:,0] - p[:-1,0])))
+    print("Min velocity relative to wind :",
+        min(np.sqrt(np.sum((p[1:,1:3] - p[:-1,1:3])**2, axis=1)) / (p[1:,0] - p[:-1,0])))
     p[:,1:3] = p[:,1:3] + (t - tStart).reshape([len(t), 1]) @ v0.reshape([1,2]) 
     
     # prediction ####################################
     b = rct.bounds
-    yBounds = [min(p[:,2]), max(p[:,2])]
-    tmp = rct[p0.t,p0.z,yBounds[0]:yBounds[1],:]
+    # yBounds = [min(p[:,2]), max(p[:,2])]
+    # b[2].min = yBounds[0]
+    # b[2].max = yBounds[1]
+    # tmp = rct[p0.t,p0.z,yBounds[0]:yBounds[1],:]
+    b[2].min = min(p[:,2])
+    b[2].max = max(p[:,2])
+    tmp = rct[p0.t,p0.z,b[2].min:b[2].max,:]
+    b[2].min = tmp.bounds[0][0]
+    b[2].max = tmp.bounds[0][-1]
+    b[3].min = tmp.bounds[1][0]
+    b[3].max = tmp.bounds[1][-1]
+    print("Bounds : ", b)
     X0,Y0 = np.meshgrid(
         np.linspace(tmp.bounds[1][0], tmp.bounds[1][-1], tmp.shape[1]),
         np.linspace(tmp.bounds[0][0], tmp.bounds[0][-1], tmp.shape[0]),
         copy=False)
-    xyLocations = np.array([[0]*X0.shape[0]*X0.shape[1], X0.ravel(), Y0.ravel()]).T
-    b[2].min = yBounds[0]
-    b[2].max = yBounds[1]
+    # xyLocations = np.array([[0]*X0.shape[0]*X0.shape[1], X0.ravel(), Y0.ravel()]).T
+    print(X0.ravel())
+    xyLocations = np.array([[0]*X0.shape[0]*X0.shape[1],
+                           X0.ravel(), Y0.ravel(),
+                           [p0.z]*X0.shape[0]*X0.shape[1]]).T
 
     return t,p0,p,b,xyLocations,v0,tmp.shape,tStart,tEnd
 
@@ -105,8 +124,8 @@ sys.stdout.flush()
 gprMap = GprPredictor('RCT', dtbase, ['RCT'], kernel0)
 
 
-profiling = False
-# profiling = True
+# profiling = False
+profiling = True
 if not profiling:
     fig, axes = plt.subplots(3,1,sharex=True,sharey=True)
 simTime = p0.t
@@ -118,17 +137,22 @@ def do_update(t):
     print("Sim time :", t)
     # prediction
 
-    xyLocations[:,0] = t
-    map0, std0 = gprMap.at_locations(xyLocations)
-    map0[map0 < 0.0] = 0.0
-    map0 = map0.reshape(mapShape)
-    std0 = std0.reshape(mapShape)
+    map0, std0 = gprMap[t,b[3].min:b[3].max,b[2].min:b[2].max,p0.z]
+    # map0 = gprMap[t,b[3].min:b[3].max,b[2].min:b[2].max,p0.z]
+    map0.data[map0.data < 0.0] = 0.0
+
+    # xyLocations[:,0] = t
+    # map1, std1 = gprMap.at_locations(xyLocations)
+    # map1 = map1.reshape(mapShape).T
+    # std1 = std1.reshape(mapShape).T
+    # map1[map1 < 0.0] = 0.0
    
     # display
     if not profiling:
         global axes
         axes[0].cla()
-        axes[0].imshow(rct[t,p0.z,b[2].min:b[2].max,:].data, origin='lower',
+        axes[0].imshow(rct[t,p0.z,b[2].min:b[2].max,b[3].min:b[3].max].data, origin='lower',
+                       interpolation='bicubic',
                        extent=[b[3].min, b[3].max, b[2].min, b[2].max])
         axes[0].grid()
         axes[0].set_title("Ground truth")
@@ -139,14 +163,16 @@ def do_update(t):
             pass
 
         axes[1].cla()
-        axes[1].imshow(map0, origin='lower',
+        axes[1].imshow(map0.data.T, origin='lower', interpolation='bicubic',
                        extent=[b[3].min, b[3].max, b[2].min, b[2].max])
         axes[1].grid()
         axes[1].set_title("MAP")
 
         axes[2].cla()
-        axes[2].imshow(std0**2, origin='lower',
+        axes[2].imshow(std0.data.T**2, origin='lower', interpolation='bicubic',
                        extent=[b[3].min, b[3].max, b[2].min, b[2].max])
+        # axes[2].imshow(map1.T, origin='lower',
+        #                extent=[b[3].min, b[3].max, b[2].min, b[2].max])
         axes[2].grid()
         axes[2].set_title("Variance AP")
 
@@ -160,7 +186,10 @@ def update(i):
     # simTime = simTime + simSpeed*(currentTime - lastTime)
     # lastTime = currentTime
     # simTime = simTime + 5.0
-    simTime = simTime + 2.0
+    if profiling:
+        simTime = simTime + 1.0
+    else:
+        simTime = simTime + 3.0
 
     do_update(simTime)
 
