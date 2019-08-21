@@ -20,6 +20,8 @@ from nephelae_mapping.gprmapping import WindKernel
 from nephelae_mapping.gprmapping import WindMapConstant
 from nephelae_mapping.database   import NephelaeDataServer
 
+from sklearn.gaussian_process import GaussianProcessRegressor
+
 def parameters(rct):
 
     # Trajectory ####################################
@@ -116,7 +118,25 @@ def do_update(t):
     # prediction
 
     xyLocations[:,0] = t
-    map0, std0 = gprMap.at_locations(xyLocations)
+    # map0, std0 = gprMap.at_locations(xyLocations)
+
+    gprProcessor0 = GaussianProcessRegressor(kernel0,
+                                             alpha=0.0,
+                                             optimizer=None,
+                                             copy_X_train=False)
+    
+    data = dtbase.find_entries(['RCT'], (slice(t-200.0,t),))
+    trainSet = [] 
+    for d in data:
+        pos = d.data.position
+        trainSet.append([pos.t,pos.x,pos.y,pos.z,d.data.data[0]])
+    trainSet = np.array(trainSet)
+
+    gprProcessor0.fit(trainSet[:,:-1], trainSet[:,-1])
+    xyLocations[:,0] = t
+    map0, std0 = gprProcessor0.predict(xyLocations, return_std=True)
+
+
     map0[map0 < 0.0] = 0.0
     map0 = map0.reshape(mapShape)
     std0 = std0.reshape(mapShape)

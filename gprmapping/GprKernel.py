@@ -93,8 +93,6 @@ class WindKernel(NephKernel):
         # print("Y shape: ", X.shape, end="\n\n")
 
         wind = self.windMap.at_locations(Y)
-        print(Y.shape)
-        print(wind.shape)
 
         # Far from most efficient but efficiency requires C++ implementation (or is it ?)
         t0,t1 = np.meshgrid(X[:,0], Y[:,0], indexing='ij', copy=False)
@@ -111,7 +109,6 @@ class WindKernel(NephKernel):
         dx = x1 - (x0 + w1 * dt)
         distMat = distMat + (dx / self.lengthScales[2])**2
         
-        print(X[:,2].shape)
         distMat = distMat + cdist((X[:,2] / self.lengthScales[3]).reshape(-1,1),
                                   (Y[:,2] / self.lengthScales[3]).reshape(-1,1),
                                   metric='sqeuclidean')
