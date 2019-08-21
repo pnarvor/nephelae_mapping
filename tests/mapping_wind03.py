@@ -80,7 +80,8 @@ t,p0,p,b,xyLocations,v0,mapShape,tStart,tEnd = parameters(rct)
 processVariance    = 1.0e-8
 noiseStddev = 0.1 * np.sqrt(processVariance)
 # kernel0 = WindKernel(lengthScales, processVariance, noiseStddev**2, v0)
-lengthScales = [70.0, 60.0, 60.0, 60.0]
+# lengthScales = [70.0, 60.0, 60.0, 60.0]
+lengthScales = [70.0, 80.0, 80.0, 60.0]
 kernel0 = WindKernel(lengthScales, processVariance, noiseStddev**2, WindMapConstant('Wind',v0))
 
 noise = noiseStddev*np.random.randn(p.shape[0])
@@ -118,25 +119,7 @@ def do_update(t):
     # prediction
 
     xyLocations[:,0] = t
-    # map0, std0 = gprMap.at_locations(xyLocations)
-
-    gprProcessor0 = GaussianProcessRegressor(kernel0,
-                                             alpha=0.0,
-                                             optimizer=None,
-                                             copy_X_train=False)
-    
-    data = dtbase.find_entries(['RCT'], (slice(t-200.0,t),))
-    trainSet = [] 
-    for d in data:
-        pos = d.data.position
-        trainSet.append([pos.t,pos.x,pos.y,pos.z,d.data.data[0]])
-    trainSet = np.array(trainSet)
-
-    gprProcessor0.fit(trainSet[:,:-1], trainSet[:,-1])
-    xyLocations[:,0] = t
-    map0, std0 = gprProcessor0.predict(xyLocations, return_std=True)
-
-
+    map0, std0 = gprMap.at_locations(xyLocations)
     map0[map0 < 0.0] = 0.0
     map0 = map0.reshape(mapShape)
     std0 = std0.reshape(mapShape)

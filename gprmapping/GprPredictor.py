@@ -58,27 +58,23 @@ class GprPredictor(MapInterface):
         # (same time location will probably be asked more often anyway)
         dataBounds = self.database.find_bounds(self.databaseTags)[0]
         kernelSpan = self.kernel.span()[0]
-        locBounds = Bounds(locations[0,0], locations[-1,0])\
-
-        print("locBounds : ",   locBounds)
-        print("dataBounds : ", dataBounds)
+        locBounds = Bounds(locations[0,0], locations[-1,0])
 
         locBounds.min = max([locBounds.min, dataBounds.min])
         locBounds.max = min([locBounds.max, dataBounds.max])
         locBounds.min = locBounds.min - kernelSpan
         locBounds.max = locBounds.max + kernelSpan
-       
+
         samples = [entry.data for entry in \
             self.database.find_entries(self.databaseTags,
                                        (slice(locBounds.min, locBounds.max),))]
         
         trainLocations =\
-            np.array([[s.position.x,\
+            np.array([[s.position.t,\
                        s.position.x,\
                        s.position.y,\
                        s.position.z]\
                        for s in samples])
-        # trainValues = np.array([s.data.data for s in samples])
         trainValues = np.array([s.data for s in samples])
         self.gprProc.fit(trainLocations, trainValues)
         return self.gprProc.predict(locations, return_std=returnStddev)
